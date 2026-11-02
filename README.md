@@ -15,4 +15,6 @@ cd backend && sqlx migrate run && cargo run -p api      # API em :8080 (GET /api
 cd frontend && pnpm install && pnpm dev                 # web em :5173 (proxy /api → :8080)
 ```
 
+Sem Docker: instale o PostgreSQL 16 nativo, crie a role `guildos` (`LOGIN CREATEDB`, necessário p/ `sqlx::test`) e o banco `guildos`, e aponte `DATABASE_URL` no `backend/.env`.
+
 Stack completa atrás do Traefik: `docker compose up --build` → http://localhost:8000.
