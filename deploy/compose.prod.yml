@@ -21,19 +21,42 @@ services:
     networks:
       - internal
 
+  # Garante o banco do app (APP_DB) no cluster. Idempotente e não destrutivo: o banco
+  # antigo (POSTGRES_DB, de antes da reescrita do core) fica intocado.
+  db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-guildos}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-guildos}
+      APP_DB: ${APP_DB:-guildos_core}
+    command:
+      - sh
+      - -c
+      - >-
+        psql -Atc "SELECT 1 FROM pg_database WHERE datname = '$${APP_DB}'" | grep -q 1
+        || createdb "$${APP_DB}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
   api:
     image: ghcr.io/brunoavila55/guildos-api:${IMAGE_TAG:?defina IMAGE_TAG}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-guildos}
+      DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${APP_DB:-guildos_core}
       API_BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-api=info,tower_http=info}
       BASE_DOMAIN: tiiv.com.br
       COOKIE_SECURE: "true"
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     labels:
       - traefik.enable=true
       - traefik.docker.network=edge
