@@ -1,16 +1,23 @@
 @import "tailwindcss";
 
-/* Cores da guilda: sobrescritas no layout do tenant a partir de guild_branding. */
-:root {
-  --guild-primary: #7c3aed;
-  --guild-secondary: #f59e0b;
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: #0e0f13;
+  --color-surface: #16181e;
+  --color-surface-2: #1d2028;
+  --color-border: #2a2e38;
+  --color-fg: #e8e9ed;
+  --color-muted: #8b90a0;
+  --color-danger: #f0616d;
+  /* Sobrescritas pelo layout do tenant com as cores da guilda. */
+  --color-primary: var(--guild-primary, #7c6cf2);
+  --color-secondary: var(--guild-secondary, #34c3a0);
 }
 
-@theme inline {
-  --color-guild-primary: var(--guild-primary);
-  --color-guild-secondary: var(--guild-secondary);
-}
-
+html,
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

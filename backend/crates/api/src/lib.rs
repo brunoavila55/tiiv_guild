@@ -1,21 +1,23 @@
-//! API HTTP (Axum): rotas, extractors e middlewares.
-
 pub mod auth;
 pub mod config;
 pub mod error;
 pub mod features;
+pub mod host;
 pub mod state;
+pub mod tenant;
 
-use axum::Router;
+use axum::{middleware, Router};
 use tower_http::trace::TraceLayer;
 
-pub use config::Config;
-pub use error::ApiError;
-pub use state::AppState;
+use state::AppState;
 
-pub fn router(state: AppState) -> Router {
+pub fn app(state: AppState) -> Router {
     Router::new()
-        .nest("/api", features::routes())
+        .nest("/api", features::router())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            host::reject_foreign_origin,
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

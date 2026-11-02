@@ -3,8 +3,8 @@
 # da chave SSH de deploy (authorized_keys do usuário `deploy`).
 #
 # Uso (via CI):  echo "$GHCR_TOKEN" | ssh deploy@host <sha-do-commit>
-# - o SHA vem em SSH_ORIGINAL_COMMAND e vira a tag das imagens;
-# - o token do GHCR chega pela stdin e só vive durante o pull.
+#   - o SHA chega em SSH_ORIGINAL_COMMAND e vira a tag das imagens;
+#   - o token do GHCR chega pela stdin e só existe durante o pull.
 set -eu
 
 REPO=brunoavila55/tiiv_guild

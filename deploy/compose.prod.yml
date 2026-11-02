@@ -1,6 +1,6 @@
-# Stack de produção. Baixado pelo script `guildos-deploy` no servidor a cada deploy;
-# o Traefik (rede externa `edge`) termina TLS para *.tiiv.com.br.
-# Variáveis vêm de /opt/guildos/.env (geradas no servidor, nunca no repositório).
+# Stack de produção, baixada pelo `guildos-deploy` no servidor a cada deploy.
+# O Traefik do servidor (rede externa `edge`) termina TLS para tiiv.com.br e *.tiiv.com.br.
+# Variáveis em /opt/guildos/.env (geradas no servidor, nunca no repositório).
 name: guildos
 
 services:
@@ -28,13 +28,16 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-guildos}
       API_BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-api=info,tower_http=info}
+      BASE_DOMAIN: tiiv.com.br
+      COOKIE_SECURE: "true"
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.guildos-api.rule=HostRegexp(`^.+\.tiiv\.com\.br$$`) && PathPrefix(`/api`)
+      - traefik.docker.network=edge
+      - "traefik.http.routers.guildos-api.rule=HostRegexp(`^([a-z0-9-]+\\.)?tiiv\\.com\\.br$$`) && PathPrefix(`/api`)"
       - traefik.http.routers.guildos-api.entrypoints=websecure
       - traefik.http.routers.guildos-api.priority=20
       - traefik.http.services.guildos-api.loadbalancer.server.port=8080
@@ -47,7 +50,8 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.guildos-web.rule=HostRegexp(`^.+\.tiiv\.com\.br$$`)
+      - traefik.docker.network=edge
+      - "traefik.http.routers.guildos-web.rule=HostRegexp(`^([a-z0-9-]+\\.)?tiiv\\.com\\.br$$`)"
       - traefik.http.routers.guildos-web.entrypoints=websecure
       - traefik.http.routers.guildos-web.priority=10
       - traefik.http.services.guildos-web.loadbalancer.server.port=80

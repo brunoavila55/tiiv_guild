@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT logo_url, banner_url, primary_color, secondary_color, motto, description_md,\n                  public_page_enabled, socials\n             FROM guild_branding",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "logo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "banner_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "primary_color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "secondary_color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "motto",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description_md",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "public_page_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "socials",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8f10fd5d6fe97feed83c6e2de34fd2126b6888f9a4c09d184ed2950dd1a338e5"
+}

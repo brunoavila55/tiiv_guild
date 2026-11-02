@@ -1,7 +1,10 @@
-//! Entidades, regras e erros de domínio. Sem IO.
+//! Regras de negócio puras (sem IO). Nada aqui conhece jogo nenhum.
 
 pub mod error;
+pub mod host;
+pub mod members;
 pub mod permissions;
+pub mod ranks;
 pub mod users;
 
-pub use error::DomainError;
+pub use error::{Error, FieldErrors};

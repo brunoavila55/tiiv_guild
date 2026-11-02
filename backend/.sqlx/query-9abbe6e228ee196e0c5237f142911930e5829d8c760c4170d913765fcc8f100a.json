@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO member_history (id, guild_id, member_id, actor_member_id, action) VALUES ($1, $2, $3, $3, 'guild.created')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9abbe6e228ee196e0c5237f142911930e5829d8c760c4170d913765fcc8f100a"
+}

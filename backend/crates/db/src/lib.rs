@@ -1,64 +1,70 @@
-//! Acesso ao Postgres: pool, repositórios SQLx e migrations.
+//! Acesso ao Postgres. Toda conexão do pool roda como `guildos_app` (sujeita ao RLS);
+//! toda query de tenant roda dentro de [`tenant_tx`].
 
-use std::time::Duration;
-
-use sqlx::migrate::Migrator;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Executor, PgConnection, Postgres, Transaction};
-
-pub mod catalog;
+pub mod guilds;
+pub mod members;
 pub mod sessions;
 pub mod users;
 
-pub use sqlx::types::Uuid;
-pub use sqlx::PgPool;
+use sqlx::{
+    migrate::Migrator,
+    postgres::{PgConnectOptions, PgPoolOptions},
+    Connection, Executor, PgConnection, Postgres, Transaction,
+};
+use uuid::Uuid;
 
-/// Papel sem ownership nem BYPASSRLS com que a API executa as queries (ver migration base).
-pub const APP_ROLE: &str = "guildos_app";
+pub use sqlx::PgPool;
 
 pub static MIGRATOR: Migrator = sqlx::migrate!("../../migrations");
 
-/// Conexão avulsa com o usuário da URL (dono das tabelas), sem `APP_ROLE`.
-/// Usada só no startup: migrations e sincronização do catálogo de jogos.
-pub async fn connect_owner(database_url: &str) -> Result<PgConnection, sqlx::Error> {
-    database_url.parse::<PgConnectOptions>()?.connect().await
+/// Papel sem ownership nem BYPASSRLS usado por todas as queries da aplicação.
+pub const APP_ROLE: &str = "guildos_app";
+
+pub type Tx = Transaction<'static, Postgres>;
+
+/// Aplica as migrations como dono do schema e devolve o pool da aplicação.
+pub async fn connect(url: &str) -> sqlx::Result<PgPool> {
+    let opts: PgConnectOptions = url.parse()?;
+    let mut owner = PgConnection::connect_with(&opts).await?;
+    MIGRATOR.run(&mut owner).await?;
+    owner.close().await?;
+    with_app_role(PgPoolOptions::new().max_connections(10))
+        .connect_with(opts)
+        .await
 }
 
-/// Aplica as migrations pendentes.
-pub async fn migrate(conn: &mut PgConnection) -> Result<(), sqlx::migrate::MigrateError> {
-    MIGRATOR.run(conn).await
-}
-
-/// Cria o pool sem abrir conexão imediatamente; a primeira query conecta.
-/// Assim a API sobe mesmo que o banco ainda esteja iniciando.
-///
-/// Toda conexão assume `APP_ROLE`, então RLS vale para qualquer query da API.
-pub fn connect_lazy(database_url: &str) -> Result<PgPool, sqlx::Error> {
-    PgPoolOptions::new()
-        .max_connections(10)
-        .acquire_timeout(Duration::from_secs(5))
-        .after_connect(|conn, _meta| {
-            Box::pin(async move {
-                conn.execute(format!("SET ROLE {APP_ROLE}").as_str())
-                    .await?;
-                Ok(())
-            })
+/// Faz toda conexão nova do pool assumir [`APP_ROLE`].
+pub fn with_app_role(opts: PgPoolOptions) -> PgPoolOptions {
+    opts.after_connect(|conn, _meta| {
+        Box::pin(async move {
+            conn.execute(format!("SET ROLE {APP_ROLE}").as_str())
+                .await
+                .map(|_| ())
         })
-        .connect_lazy(database_url)
+    })
 }
 
-/// Abre uma transação no escopo de uma guilda: `APP_ROLE` + `app.guild_id` locais à transação.
-/// Única porta de entrada para queries em tabelas de tenant.
-pub async fn begin_tenant(
-    pool: &PgPool,
-    guild_id: Uuid,
-) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+/// Abre uma transação com o tenant definido (`app.guild_id`), escopo das policies de RLS.
+pub async fn tenant_tx(pool: &PgPool, guild_id: Uuid) -> sqlx::Result<Tx> {
     let mut tx = pool.begin().await?;
-    tx.execute(format!("SET LOCAL ROLE {APP_ROLE}").as_str())
-        .await?;
-    sqlx::query("SELECT set_config('app.guild_id', $1, true)")
-        .bind(guild_id.to_string())
-        .execute(&mut *tx)
-        .await?;
+    set_tenant(&mut tx, guild_id).await?;
     Ok(tx)
+}
+
+async fn set_tenant(conn: &mut PgConnection, guild_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query!(
+        "SELECT set_config('app.guild_id', $1, true)",
+        guild_id.to_string()
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(())
+}
+
+/// `true` se o erro é violação de unicidade da constraint/índice `name`.
+pub fn is_unique_violation(err: &sqlx::Error, name: &str) -> bool {
+    match err {
+        sqlx::Error::Database(e) => e.is_unique_violation() && e.constraint() == Some(name),
+        _ => false,
+    }
 }

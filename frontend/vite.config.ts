@@ -4,6 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const baseDomain = process.env.VITE_BASE_DOMAIN ?? "guildos.localhost";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,8 +13,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Todo subdomínio do domínio base (app., admin., {slug}.) chega neste dev server.
+    allowedHosts: [baseDomain, `.${baseDomain}`],
     proxy: {
-      "/api": process.env.VITE_API_PROXY ?? "http://localhost:8080",
+      // Sem changeOrigin: a API precisa do Host original para resolver o tenant.
+      "/api": { target: process.env.VITE_API_PROXY ?? "http://127.0.0.1:8080", changeOrigin: false },
     },
   },
   test: {

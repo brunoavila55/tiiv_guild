@@ -1,32 +1,13 @@
 use axum::{extract::State, routing::get, Json, Router};
-use serde::Serialize;
+use serde_json::{json, Value};
 
-use crate::{ApiError, AppState};
+use crate::{error::ApiResult, state::AppState};
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/health", get(live))
-        .route("/health/ready", get(ready))
+pub fn router() -> Router<AppState> {
+    Router::new().route("/health", get(health))
 }
 
-#[derive(Serialize)]
-struct Health {
-    status: &'static str,
-}
-
-/// Liveness: o processo está de pé.
-async fn live() -> Json<Health> {
-    Json(Health { status: "ok" })
-}
-
-/// Readiness: o banco responde.
-async fn ready(State(state): State<AppState>) -> Result<Json<Health>, ApiError> {
-    sqlx::query("SELECT 1")
-        .execute(&state.pool)
-        .await
-        .map_err(|err| {
-            tracing::warn!(error = %err, "banco indisponível");
-            ApiError::Unavailable
-        })?;
-    Ok(Json(Health { status: "ok" }))
+async fn health(State(state): State<AppState>) -> ApiResult<Json<Value>> {
+    sqlx::query("SELECT 1").execute(&state.pool).await?;
+    Ok(Json(json!({ "status": "ok" })))
 }

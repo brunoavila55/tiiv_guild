@@ -1,16 +1,22 @@
-//! Uma feature = um módulo. Cada uma expõe `routes()` e é montada aqui.
+//! Uma feature = um módulo com o próprio `router()`.
+
+mod admin;
+mod auth;
+mod guilds;
+mod health;
+mod members;
+mod tenant;
 
 use axum::Router;
 
-use crate::AppState;
+use crate::state::AppState;
 
-pub mod auth;
-pub mod games;
-pub mod health;
-
-pub fn routes() -> Router<AppState> {
+pub fn router() -> Router<AppState> {
     Router::new()
-        .merge(health::routes())
-        .merge(auth::routes())
-        .merge(games::routes())
+        .merge(health::router())
+        .merge(auth::router())
+        .merge(guilds::router())
+        .merge(tenant::router())
+        .merge(members::router())
+        .merge(admin::router())
 }

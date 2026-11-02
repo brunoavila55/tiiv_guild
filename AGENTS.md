@@ -1,208 +1,185 @@
-# CLAUDE.md — GuildOS (nome provisório)
+# AGENTS.md — GuildOS (nome provisório)
 
-SaaS **ERP para guildas de MMORPG**, multi-tenant. Primeiro jogo usado: **Perfect World** (PW), mas o produto **não é um gerenciador de PW**. A arquitetura é **game-agnostic** desde o dia 1: tudo que é específico de jogo é **dado do catálogo**, cadastrado pelo superadmin da plataforma (jogos, classes, servidores, campos de personagem, ranks padrão), nunca hardcoded no core nem em seeds do repositório.
+SaaS **ERP para guildas e comunidades de jogo**, multi-tenant, com **um subdomínio por guilda** (`{slug}.tiiv.com.br`).
+
+O core **não conhece nenhum jogo**. Não existe tabela, coluna, seed, enum ou texto de jogo no core. Tudo que é de jogo (catálogo de jogos, classes, servidores, personagens com atributos de jogo) é um **módulo opcional** que a guilda ativa — e mesmo esse módulo é genérico: os jogos são dados cadastrados pelo superadmin, nunca código.
 
 > Leia este arquivo inteiro antes de qualquer tarefa. Em caso de conflito entre este arquivo e um pedido pontual, pergunte.
 
 ---
 
-## 1. Visão do produto
+## 1. Produto
 
-- Uma **guilda** = um **tenant**. Um usuário pode pertencer a várias guildas (inclusive de jogos diferentes).
-- Escopo atual (MVP):
-  1. **Visual da guilda** — identidade (nome, tag, logo, banner, cores, tema), página pública da guilda.
-  2. **Gestão de players** — membros, personagens (alts), classes, níveis, cargos/ranks, status, histórico.
-- Escopo futuro (a base já precisa suportar, **não implementar agora**): eventos, raids, dungeons, presença/DKP, loot, recrutamento, banco da guilda, notificações (Discord), relatórios.
+- **Guilda = tenant.** Cada guilda tem um `slug` único que vira o subdomínio: `acme.tiiv.com.br`.
+- **Usuário (conta) ≠ membro (vínculo com uma guilda).** Um usuário pode ser membro de várias guildas. Um membro pode existir sem conta (`user_id NULL`), para o líder cadastrar quem não usa o sistema.
+- **Core** (vale para qualquer guilda, de qualquer jogo ou sem jogo): identidade visual, página pública, membros, ranks/permissões, histórico, campos customizados definidos pela própria guilda, convites.
+- **Módulos** (opcionais, ativados por guilda): `games` (catálogo de jogos + personagens), e no futuro `events`, `raids`, `dkp`, `bank`, `recruitment`, `discord`…
 
-## 2. Stack
+## 2. Domínios e hosts
+
+`BASE_DOMAIN` (config) = `tiiv.com.br` em produção, `guildos.localhost` em dev.
+
+| Host | O quê |
+|---|---|
+| `BASE_DOMAIN`, `www.BASE_DOMAIN` | Landing page |
+| `app.BASE_DOMAIN` | Conta: login, cadastro, "minhas guildas", criar guilda |
+| `admin.BASE_DOMAIN` | Painel da plataforma (superadmin) |
+| `{slug}.BASE_DOMAIN` | A guilda: página pública em `/`, painel em `/painel` |
+
+- A API responde em **todos** os hosts no prefixo `/api`. O **host define o contexto**: rotas de tenant só existem em host de guilda; rotas `/api/admin/*` só em `admin.`.
+- Subdomínios reservados (nunca viram slug): ver `domain::host::RESERVED_SUBDOMAINS`.
+- Sessão: um único cookie com `Domain=COOKIE_DOMAIN` (o `BASE_DOMAIN`), então o login feito em `app.` vale em toda guilda.
+- CSRF: requests que alteram estado com header `Origin` fora de `BASE_DOMAIN`/subdomínios → 403. Tenants nunca hospedam HTML/JS próprio (só imagens), porque todos os subdomínios são *same-site*.
+- Domínio próprio por guilda (CNAME) é futuro; o resolvedor de host é o único ponto a mudar.
+
+## 3. Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Backend | Rust (stable), **Axum**, **Tokio**, **SQLx** (queries checadas em compile-time), **serde**, **tracing** |
-| Banco | PostgreSQL 16+, migrations via `sqlx migrate` |
-| Auth | Sessão via cookie HttpOnly + tabela `sessions` (argon2 p/ senha). OAuth Discord planejado (P2) |
-| Frontend | React + TypeScript + Vite, TanStack Query, TanStack Router, Tailwind, shadcn/ui, react-hook-form + zod |
-| Storage de imagens | S3-compatível (MinIO em dev/self-hosted) |
-| Infra | Docker + Traefik, CI no GitHub Actions. **Não usar Supabase.** |
-| Contrato API | OpenAPI gerado pelo backend (`utoipa`) → client TS gerado (`openapi-typescript`) |
+| Backend | Rust stable, **Axum**, **Tokio**, **SQLx** (queries checadas em compile-time), serde, tracing, thiserror |
+| Banco | PostgreSQL 16+, migrations `sqlx migrate` (aplicadas pela API ao subir) |
+| Auth | Sessão em cookie HttpOnly + tabela `sessions` (token aleatório, só o SHA-256 no banco); senha com argon2. Discord OAuth planejado |
+| Frontend | React + TypeScript + Vite, TanStack Router, TanStack Query, Tailwind v4, react-hook-form + zod |
+| Storage | S3-compatível (MinIO em dev) — entra com o upload de branding |
+| Infra | Docker, Traefik (TLS wildcard `*.tiiv.com.br`), GitHub Actions → GHCR → VPS. **Não usar Supabase/BaaS.** |
+| Contrato API | Tipos TS escritos à mão em `frontend/src/lib/api/types.ts` por enquanto; OpenAPI (`utoipa`) + client gerado quando a API estabilizar |
 
-## 3. Estrutura do repositório
+## 4. Repositório
 
 ```
 /
-├── CLAUDE.md
-├── docker-compose.yml          # postgres, minio, api, web, traefik
+├── AGENTS.md
+├── docker-compose.yml          # dev: postgres, minio
 ├── backend/
 │   ├── Cargo.toml              # workspace
-│   ├── crates/
-│   │   ├── api/                # binário Axum: rotas, extractors, middlewares
-│   │   ├── domain/             # entidades, regras, erros de domínio (sem IO)
-│   │   ├── db/                 # repositórios SQLx, migrations
-│   │   ├── games/              # regras genéricas do catálogo: validação de definição de jogo e character_schema
-│   │   └── shared/             # tipos comuns (ids, paginação, erros)
-│   └── migrations/
-├── frontend/
-│   └── src/
-│       ├── app/                # rotas, layout, providers
-│       ├── features/           # guild-branding/, members/, characters/, admin-catalog/, ... (1 pasta por feature)
-│       ├── components/ui/      # shadcn
-│       └── lib/api/            # client gerado + hooks TanStack Query
+│   ├── migrations/
+│   └── crates/
+│       ├── domain/             # regras puras, sem IO: host/slug, permissões, erros, validações
+│       ├── db/                 # pool, transação de tenant, repositórios SQLx
+│       └── api/                # binário Axum: config, extractors, features/<feature>.rs
+├── frontend/src/
+│   ├── app/                    # host → árvore de rotas, providers, textos (i18n)
+│   ├── features/<feature>/     # landing, auth, guilds, guild-public, guild-panel, members, admin
+│   ├── components/ui/          # componentes base
+│   └── lib/                    # api client, utils
 └── deploy/                     # compose de produção + script de deploy do VPS
 ```
 
-Visual por jogo/classe (ícones, cores) também é dado do catálogo (`metadata` jsonb), não pasta no frontend.
+Regra: **uma feature = um módulo** em `api/src/features/` e uma pasta em `frontend/src/features/`. Um módulo opcional novo entra sem tocar no core.
 
-Regra: **uma feature = um módulo** no backend (`api/src/features/<feature>/`) e uma pasta em `frontend/src/features/<feature>/`. Features futuras (events, raids, dungeons) entram como novos módulos sem tocar nos existentes.
+## 5. Multi-tenancy
 
-## 4. Multi-tenancy
+- Banco e schema compartilhados, coluna **`guild_id`** em toda tabela de tenant.
+- **Row Level Security** em toda tabela de tenant: `USING / WITH CHECK (guild_id = app_current_guild_id())`.
+- A API conecta como dono do schema só para migrar; o pool de queries faz `SET ROLE guildos_app` (sem ownership, sem `BYPASSRLS`) em toda conexão.
+- Request de tenant: `TenantCtx` resolve **host → guilda** (404), sessão (401), membro ativo (403) e permissões; toda query de tenant roda em `db::tenant_tx(pool, guild_id)`, que abre transação e faz `set_config('app.guild_id', …, true)`.
+- Tabelas globais (sem `guild_id`, sem RLS): `users`, `sessions`, `guilds` (o registro de tenants: slug → id).
+- Leituras cruzando tenants (ex.: "minhas guildas") só por função `SECURITY DEFINER` estreita e revisada (`user_guilds`).
+- **Nunca** query de tenant fora de `tenant_tx`. Testes provam isolamento A/B por API e por SQL direto.
 
-- Estratégia: **banco compartilhado, schema compartilhado, coluna `guild_id`** em toda tabela de tenant.
-- Defesa em profundidade com **Row Level Security** no Postgres:
-  - Cada request abre transação e executa `SET LOCAL app.guild_id = '<uuid>'`.
-  - Policies: `USING (guild_id = current_setting('app.guild_id')::uuid)`.
-  - A role da aplicação **não** é owner das tabelas (RLS não é bypassado).
-- Resolução do tenant: rota `/api/guilds/{guild_slug}/...` → extractor `TenantCtx { guild_id, member_id, permissions }` que valida que o usuário é membro.
-- Tabelas globais (sem `guild_id`): `users`, `sessions`, `games`, `game_classes`, `game_servers`, `game_server_classes`, `plans`.
-- **Nunca** escrever query de tenant sem passar pelo `TenantCtx`. Testes devem provar isolamento entre guildas.
-
-## 5. Modelo de dados (base)
+## 6. Modelo de dados
 
 ```text
-users(id, email, password_hash, display_name, avatar_url, created_at)
-games(id, slug, name, active, level_min, level_max,
-      character_schema jsonb, default_ranks jsonb, created_at)  -- tudo cadastrado pelo superadmin
-game_classes(id, game_id, slug, name, role_hint, metadata jsonb, active) -- role_hint: tank|healer|dps|support
-game_servers(id, game_id, slug, name, region, active)
-game_server_classes(game_id, server_id, class_id)  -- classes de um servidor (versões do jogo); vazio = todas
+-- global
+users(id, email UNIQUE lower, password_hash, display_name, avatar_url, created_at)
+sessions(id, user_id, token_hash UNIQUE, created_at, expires_at)
+guilds(id, slug UNIQUE, name, tag, owner_user_id, created_at)
 
-guilds(id, game_id, server_id, slug UNIQUE, name, tag, faction,
-       created_at, owner_user_id, plan_id)
+-- tenant (RLS)
 guild_branding(guild_id PK, logo_url, banner_url, primary_color, secondary_color,
-               theme, motto, description_md, public_page_enabled, socials jsonb)
-
-guild_ranks(id, guild_id, name, position, permissions text[])   -- ex: Líder, Vice, Diretor, Membro
+               motto, description_md, public_page_enabled, socials jsonb)
+guild_ranks(id, guild_id, name, position, permissions text[])        -- menor position = topo
 guild_members(id, guild_id, user_id NULL, nickname, rank_id, status,  -- active|trial|inactive|left|banned
-              joined_at, left_at, notes)
-characters(id, guild_id, member_id, game_class_id, name, level, is_main,
-           attributes jsonb, created_at, updated_at)            -- attributes = campos do character_schema do jogo
+              fields jsonb, notes, joined_at, left_at)                -- fields = campos customizados da guilda
 member_history(id, guild_id, member_id, actor_member_id, action, payload jsonb, at)
 
--- Reservado p/ futuro (NÃO criar ainda, só respeitar o design):
--- activities(id, guild_id, kind, ...)  kind: event|raid|dungeon|war  (tabela base + extensões)
--- activity_participants(activity_id, character_id, status, ...)
+-- planejado (NÃO criar antes da etapa do roadmap)
+guild_settings(guild_id PK, member_fields jsonb)        -- schema dos campos customizados (P1)
+guild_modules(guild_id, module, enabled, settings jsonb) -- módulos ativos (P1)
+games / game_classes / game_servers / characters         -- módulo games (P2)
+activities / activity_participants                       -- eventos, raids… (P3)
 ```
 
-Regras de dados:
-- IDs: UUID v7. Timestamps `timestamptz`. Soft delete só onde há histórico (membros).
-- Campos específicos de jogo (cultivo, reino, ataque/defesa no PW etc.) vão em `attributes jsonb`, **validados pelo `character_schema` do jogo** — nunca colunas dedicadas no core.
-- Itens do catálogo não são apagados (podem estar referenciados): usa-se `active = false`.
-- Usuário (conta) ≠ membro (vínculo com guilda) ≠ personagem. Um membro pode existir sem conta (`user_id NULL`) para o líder cadastrar players que não usam o sistema.
-
-## 6. Catálogo de jogos (superadmin)
-
-- O **superadmin da plataforma** cadastra e edita pelo painel (`/api/admin/games/...`): jogos (faixa de nível, `character_schema`, ranks padrão), classes e servidores. Classes e servidores mudam por jogo **e por versão do jogo** (servidores privados), por isso são dados, nunca código.
-- Superadmin = e-mails em `SUPERADMIN_EMAILS` (config do servidor). Extractor `SuperAdmin` (401 sem sessão, 403 sem o papel). `/api/me` expõe `is_superadmin`.
-- `character_schema`: subconjunto de JSON Schema (`string`/`integer`/`number`/`boolean`, `enum`, `minimum`/`maximum`, `minLength`/`maxLength`, `required`, `additionalProperties: false`; `title`/`x-enumLabels` para a UI), validado ao salvar e usado para validar `attributes` (crate `games`). A ordem das propriedades é a ordem do formulário.
-- `default_ranks`: ranks criados em toda guilda nova do jogo; o rank do topo (menor `position`) precisa de todas as permissões.
-- Leitura pública: `GET /api/games` e `GET /api/games/{slug}` (só itens ativos).
-- Frontend renderiza o formulário de personagem a partir de `character_schema`.
-- Adicionar um jogo novo = **cadastro no painel. Zero mudança de código.** Isso é critério de aceite da arquitetura.
+Regras:
+- IDs UUID v7, gerados na aplicação. Timestamps `timestamptz`.
+- Soft delete só onde há histórico (membros: `status = left`, `left_at`).
+- Campos que variam por guilda/jogo vão em `jsonb` validado por schema (subconjunto de JSON Schema: `string`/`integer`/`number`/`boolean`, `enum`, `minimum`/`maximum`, `minLength`/`maxLength`, `required`, `title`). Nunca coluna dedicada.
+- Ranks padrão de guilda nova são genéricos da plataforma (`domain::ranks::default_ranks`): Líder, Oficial, Membro, Recruta.
 
 ## 7. Permissões
 
-- Permissões granulares por rank (strings): `guild.branding.edit`, `members.view`, `members.manage`, `members.kick`, `ranks.manage`, `characters.manage_own`, `characters.manage_any`.
-- Futuras: `events.*`, `raids.*`, `dungeons.*` — adicionar ao enum, não refatorar.
-- Dono da guilda tem todas. Checagem sempre no backend via `TenantCtx::require(perm)`.
-- Superadmin é papel da **plataforma** (catálogo de jogos), não da guilda: não dá acesso a dados de tenant.
+- Strings granulares por rank: `guild.settings.edit`, `guild.branding.edit`, `members.view`, `members.manage`, `members.kick`, `ranks.manage`, `modules.manage`.
+- Módulos acrescentam as suas (`games.manage`, `events.manage`…) sem refatorar o core.
+- Dono da guilda tem todas. Checagem sempre no backend: `ctx.require(Permission::X)?`.
+- **Superadmin** = e-mails em `SUPERADMIN_EMAILS`; é papel da plataforma (`admin.`), **não** dá acesso a dados de tenant.
 
-## 8. Convenções de código
+## 8. Convenções
 
 **Rust**
-- `cargo fmt` + `cargo clippy -- -D warnings` devem passar.
-- Erros: `thiserror` no domínio, mapeados para `ApiError` com JSON `{ "code": "...", "message": "..." }` e status HTTP coerente.
-- Nada de `unwrap()`/`expect()` fora de testes e startup.
-- Handlers finos: validação → serviço de domínio → repositório.
-- Queries com `sqlx::query_as!` (checadas). `SQLX_OFFLINE=true` no CI.
+- `cargo fmt` e `cargo clippy --workspace --all-targets -- -D warnings` passam.
+- Sem `unwrap()`/`expect()` fora de testes e startup.
+- Erros: `domain::Error` (thiserror) → `ApiError` → JSON `{ "code", "message", "fields"? }` com status coerente.
+- Handlers finos: extractor/validação → regra de domínio → repositório.
+- Queries com `sqlx::query!`/`query_as!`; após mudar query rode `cargo sqlx prepare --workspace` e comite `.sqlx/` (CI usa `SQLX_OFFLINE=true`).
 
 **Frontend**
-- TypeScript strict. Sem `any`.
-- Dados do servidor só via TanStack Query; estado de UI local com `useState`/zustand se necessário.
-- Cores da guilda aplicadas via CSS variables (`--guild-primary`, `--guild-secondary`) no layout do tenant.
-- UI em **pt-BR**; textos centralizados para futura i18n.
+- TypeScript strict, sem `any`.
+- Dados do servidor só via TanStack Query.
+- Cores da guilda via CSS variables `--guild-primary` / `--guild-secondary` no layout do tenant.
+- UI em **pt-BR**, textos em `src/app/i18n.ts`.
+- Host → contexto em `src/app/host.ts` (espelho de `domain::host`).
 
 **Geral**
-- Commits: Conventional Commits.
-- Toda migration é reversível ou explicitamente marcada como irreversível.
-- Não adicionar dependência nova sem justificar no PR.
+- Conventional Commits. Migrations reversíveis (`.up.sql`/`.down.sql`).
+- Dependência nova só com justificativa no PR. Nenhum segredo no repositório.
 
 ## 9. Comandos
 
 ```bash
-docker compose up -d postgres minio        # infra local
-cd backend && sqlx migrate run             # migrations
-cargo run -p api                           # API em :8080
-cargo test --workspace                     # testes (usa banco de teste)
-cd frontend && pnpm dev                    # web em :5173
-pnpm gen:api                               # regenera client a partir do OpenAPI
+docker compose up -d postgres            # ou Postgres 16 nativo (ver README)
+cd backend && cargo run -p api           # API em :8080, migra ao subir
+cargo test --workspace                   # sqlx::test: um banco por teste
+cd frontend && pnpm dev                  # http://app.guildos.localhost:5173
 ```
 
 ## 10. Testes
 
-- Backend: testes de integração com Postgres real (`sqlx::test`), um banco por teste.
-- **Teste obrigatório de isolamento**: guilda A nunca lê/escreve dado da guilda B (por API e por query direta com RLS).
-- Frontend: Vitest para lógica; Playwright para fluxos críticos (P1).
+- Backend: integração com Postgres real (`#[sqlx::test]`).
+- **Obrigatório:** isolamento — guilda A nunca lê/escreve dado da guilda B (por API, via host, e por SQL com RLS).
+- Frontend: Vitest para lógica (host, validações); Playwright nos fluxos críticos a partir do P1.
 
 ---
 
 ## 11. Roadmap
 
-### P0 — Fundação (bloqueia tudo)
-1. **Workspace e infra**: estrutura de pastas da seção 3, docker-compose, CI (fmt, clippy, test, build web).
-   - Aceite: `docker compose up` + `cargo run` + `pnpm dev` sobem sem erro; CI verde num PR vazio.
-2. **Schema base + RLS**: tabelas da seção 5 (exceto reservadas), policies RLS, role de app sem bypass.
-   - Aceite: teste prova que query sem `app.guild_id` não retorna linhas de tenant; teste de isolamento A/B passa.
-3. **Auth**: registro, login, logout, `/me`, sessão por cookie.
-   - Aceite: senha com argon2; cookie HttpOnly+Secure+SameSite=Lax; rota protegida retorna 401 sem sessão.
-4. **Catálogo de jogos pelo superadmin**: CRUD de jogos/classes/servidores (com filtro de classes por servidor), `character_schema` e ranks padrão por jogo.
-   - Aceite: superadmin cadastra um jogo e `GET /api/games/{slug}` retorna classes e `character_schema`; um segundo jogo entra só por cadastro; não-superadmin recebe 403.
-5. **Criação de guilda + TenantCtx**: criar guilda escolhendo jogo/servidor; criador vira dono; ranks padrão criados.
-   - Aceite: extractor rejeita não-membro com 403; slug único; ranks padrão do jogo aplicados.
+### P0 — Fundação
+1. Workspace, docker-compose, CI (fmt, clippy, test, build web), deploy.
+2. Schema base + RLS + papel `guildos_app`. Aceite: sem `app.guild_id` nenhuma linha de tenant; isolamento A/B.
+3. Auth: registro, login, logout, `/api/me`, cookie compartilhado entre subdomínios. Aceite: argon2; HttpOnly+Secure+SameSite=Lax; 401 sem sessão.
+4. Resolução de tenant por subdomínio + criação de guilda. Aceite: slug validado/reservado/único; criador vira dono com ranks padrão; não-membro → 403; host inexistente → 404.
+5. Painel mínimo da guilda (dados da guilda, lista de membros) e painel do superadmin (lista de guildas).
 
-### P1 — MVP (visual + players)
-1. **Visual da guilda**: editar logo, banner (upload S3), cores, tema, lema, descrição (markdown), redes sociais.
-   - Aceite: só quem tem `guild.branding.edit` edita; upload valida tipo/tamanho (≤2 MB, png/jpg/webp); cores aplicadas no layout em tempo real; preview antes de salvar.
-2. **Página pública da guilda** (`/g/{slug}`): branding + lista de membros ativos (nick, classe, nível, rank), se `public_page_enabled`.
-   - Aceite: desligada → 404; não expõe e-mail nem notas internas.
-3. **Gestão de membros**: listar (filtros por rank/status/classe, busca, paginação), adicionar (com ou sem conta), editar rank/status/notas, remover (soft).
-   - Aceite: permissões respeitadas; toda alteração gera registro em `member_history`.
-4. **Personagens**: CRUD de personagens por membro, main/alts, formulário dinâmico a partir do `character_schema`.
-   - Aceite: `attributes` inválido → 422 com campo; exatamente um `is_main` por membro.
-5. **Ranks**: CRUD de ranks, ordenação, edição de permissões.
-   - Aceite: não é possível remover a última permissão de gestão do dono; não remove rank em uso sem realocar membros.
-6. **Convites**: link de convite com expiração para um usuário entrar e vincular-se a um membro existente.
-   - Aceite: link expira; uso único (ou N usos configurável).
+### P1 — MVP
+1. Visual da guilda: logo/banner (upload S3, ≤2 MB, png/jpg/webp), cores, lema, descrição markdown, redes; preview.
+2. Página pública (`{slug}.BASE_DOMAIN/`): branding + membros ativos; desligada → 404; nunca expõe e-mail/notas.
+3. Gestão de membros: filtros, busca, paginação, adicionar (com/sem conta), editar rank/status/notas, remover (soft); tudo gera `member_history`.
+4. Campos customizados de membro definidos pela guilda (`guild_settings.member_fields`); 422 com campo inválido.
+5. Ranks: CRUD, ordenação, permissões; dono nunca perde gestão; rank em uso não é removido sem realocar.
+6. Convites com expiração e N usos para vincular conta a membro.
+7. Infra de módulos (`guild_modules`, ativar/desativar por guilda, `modules.manage`).
 
-### P2 — Preparação para atividades
-1. **Base `activities`** (tabela única com `kind` + extensões) e `activity_participants`; sem UI completa ainda.
-   - Aceite: criar um `kind` novo não requer migration no core além da extensão do próprio kind.
-2. **Eventos simples**: agenda da guilda, inscrição de personagens.
-3. **Login com Discord** e webhook de notificação para canal da guilda.
-4. **Histórico/auditoria** visível no painel.
+### P2 — Módulo `games`
+1. Catálogo pelo superadmin: jogos, classes, servidores (e classes por servidor), `character_schema`.
+2. Guilda ativa o módulo e escolhe jogo/servidor; personagens (main/alts) por membro com formulário a partir do schema.
+   Aceite: segundo jogo entra só por cadastro, zero código.
 
-### P3 — Expansão
-1. Raids e dungeons (composição por `role_hint`, lista de espera, presença).
-2. DKP/pontos de presença e loot.
-3. Segundo jogo em uso real (validar o catálogo na prática).
-4. Planos/billing por guilda, limites por plano.
-5. Dashboard de métricas da guilda (atividade, crescimento, distribuição de classes).
-
----
+### P3 — Atividades e expansão
+Eventos/agenda, raids e dungeons, presença/DKP, loot, Discord (login + webhook), domínio próprio por guilda, planos/billing, métricas.
 
 ## 12. O que NÃO fazer
 
-- Não criar colunas específicas de Perfect World (ou de qualquer jogo) no core.
-- Não colocar dados de jogo (classes, servidores, campos) no código ou em seeds: é cadastro do superadmin.
-- Não implementar eventos/raids/dungeons antes do P1 estar fechado.
-- Não usar Supabase nem BaaS equivalente.
-- Não acessar dados de tenant fora do `TenantCtx`.
+- Nada de jogo no core: sem colunas, enums, seeds ou textos de um jogo específico.
+- Não implementar módulo antes da etapa dele no roadmap.
+- Não acessar dados de tenant fora de `TenantCtx`/`tenant_tx`.
+- Não usar Supabase nem BaaS.
 - Não guardar segredos no repositório (`.env.example` só com placeholders).

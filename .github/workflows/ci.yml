@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Não cancela execuções no main: um deploy interrompido no meio deixaria o servidor inconsistente.
+  # No main não cancela: um deploy interrompido deixaria o servidor inconsistente.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -92,6 +92,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: true
+          build-args: |
+            VITE_BASE_DOMAIN=tiiv.com.br
           tags: |
             ghcr.io/brunoavila55/guildos-${{ matrix.name }}:${{ github.sha }}
             ghcr.io/brunoavila55/guildos-${{ matrix.name }}:main

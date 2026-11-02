@@ -1,66 +1,65 @@
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::Json;
-use domain::DomainError;
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use domain::FieldErrors;
 use serde::Serialize;
 
+/// Erro de API: vira `{ "code", "message", "fields"? }` com o status HTTP correspondente.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error(transparent)]
-    Domain(#[from] DomainError),
-
-    #[error("não autenticado")]
-    Unauthorized,
-
-    #[error("e-mail ou senha inválidos")]
+    Domain(#[from] domain::Error),
+    #[error("e-mail ou senha incorretos")]
     InvalidCredentials,
-
-    #[error("serviço indisponível")]
-    Unavailable,
-
+    #[error("origem da requisição não permitida")]
+    ForeignOrigin,
     #[error("erro interno")]
-    Internal(#[source] anyhow::Error),
+    Internal(#[from] anyhow::Error),
 }
 
 impl From<sqlx::Error> for ApiError {
-    fn from(err: sqlx::Error) -> Self {
-        Self::Internal(err.into())
+    fn from(e: sqlx::Error) -> Self {
+        Self::Internal(e.into())
     }
 }
 
 #[derive(Serialize)]
-struct ErrorBody<'a> {
+struct Body<'a> {
     code: &'a str,
     message: String,
-}
-
-impl ApiError {
-    fn status_and_code(&self) -> (StatusCode, &'static str) {
-        match self {
-            Self::Domain(DomainError::NotFound) => (StatusCode::NOT_FOUND, "not_found"),
-            Self::Domain(DomainError::Forbidden) => (StatusCode::FORBIDDEN, "forbidden"),
-            Self::Domain(DomainError::Conflict(_)) => (StatusCode::CONFLICT, "conflict"),
-            Self::Domain(DomainError::Validation { .. }) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "validation_failed")
-            }
-            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
-            Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid_credentials"),
-            Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
-            Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
-        }
-    }
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fields: Option<&'a FieldErrors>,
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, code) = self.status_and_code();
-        if let Self::Internal(err) = &self {
-            tracing::error!(error = ?err, "erro interno");
-        }
-        let body = ErrorBody {
+        use domain::Error as D;
+        let (status, code, fields) = match &self {
+            Self::Domain(D::Validation(f)) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "validation_failed",
+                Some(f),
+            ),
+            Self::Domain(D::Conflict(_)) => (StatusCode::CONFLICT, "conflict", None),
+            Self::Domain(D::NotFound) => (StatusCode::NOT_FOUND, "not_found", None),
+            Self::Domain(D::Unauthenticated) => (StatusCode::UNAUTHORIZED, "unauthenticated", None),
+            Self::Domain(D::Forbidden) => (StatusCode::FORBIDDEN, "forbidden", None),
+            Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid_credentials", None),
+            Self::ForeignOrigin => (StatusCode::FORBIDDEN, "foreign_origin", None),
+            Self::Internal(e) => {
+                tracing::error!(error = ?e, "erro interno");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal", None)
+            }
+        };
+        let body = Body {
             code,
             message: self.to_string(),
+            fields,
         };
         (status, Json(body)).into_response()
     }
 }
+
+pub type ApiResult<T> = Result<T, ApiError>;

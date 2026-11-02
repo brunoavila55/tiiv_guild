@@ -1,21 +1,28 @@
-//! Registro, login, logout e `/me` (P0.3).
+//! Registro, login, logout e `/me`. Valem em qualquer host (o cookie é do domínio todo).
 
-use axum::extract::State;
-use axum::http::header::{SET_COOKIE, USER_AGENT};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{AppendHeaders, IntoResponse};
-use axum::routing::{get, post};
-use axum::{Json, Router};
-use chrono::{DateTime, Utc};
-use db::users::UserRow;
-use db::Uuid;
-use domain::DomainError;
+use axum::{
+    extract::State,
+    http::{header, HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
+use chrono::Utc;
+use db::users::User;
+use domain::users::{normalize_email, validate_registration};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use crate::auth::{self, AuthUser};
-use crate::{ApiError, AppState};
+use crate::{
+    auth::{
+        clear_cookie, hash_password, hash_token, new_session_token, session_cookie, session_token,
+        verify_password, CurrentUser, SESSION_TTL,
+    },
+    error::{ApiError, ApiResult},
+    state::AppState,
+};
 
-pub fn routes() -> Router<AppState> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))
@@ -24,135 +31,119 @@ pub fn routes() -> Router<AppState> {
 }
 
 #[derive(Deserialize)]
-struct RegisterBody {
+struct RegisterReq {
     email: String,
     password: String,
     display_name: String,
 }
 
 #[derive(Deserialize)]
-struct LoginBody {
+struct LoginReq {
     email: String,
     password: String,
 }
 
 #[derive(Serialize)]
-struct UserResponse {
+pub struct UserDto {
     id: Uuid,
     email: String,
     display_name: String,
     avatar_url: Option<String>,
-    created_at: DateTime<Utc>,
-    /// Acesso ao painel da plataforma (catálogo de jogos).
-    is_superadmin: bool,
 }
 
-impl UserResponse {
-    fn new(row: UserRow, state: &AppState) -> Self {
+impl From<User> for UserDto {
+    fn from(u: User) -> Self {
         Self {
-            is_superadmin: state.is_superadmin(&row.email),
-            id: row.id,
-            email: row.email,
-            display_name: row.display_name,
-            avatar_url: row.avatar_url,
-            created_at: row.created_at,
+            id: u.id,
+            email: u.email,
+            display_name: u.display_name,
+            avatar_url: u.avatar_url,
         }
     }
 }
 
+#[derive(Serialize)]
+struct MyGuildDto {
+    slug: String,
+    name: String,
+    tag: Option<String>,
+    is_owner: bool,
+    rank_name: String,
+}
+
+#[derive(Serialize)]
+struct MeDto {
+    user: UserDto,
+    is_superadmin: bool,
+    guilds: Vec<MyGuildDto>,
+}
+
 async fn register(
     State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(body): Json<RegisterBody>,
-) -> Result<impl IntoResponse, ApiError> {
-    let new_user =
-        domain::users::validate_registration(&body.email, &body.password, &body.display_name)?;
-    let password_hash = auth::hash_password(body.password).await?;
+    Json(req): Json<RegisterReq>,
+) -> ApiResult<Response> {
+    let email = normalize_email(&req.email);
+    let display_name = req.display_name.trim().to_owned();
+    validate_registration(&email, &req.password, &display_name)?;
 
-    let mut tx = state.pool.begin().await?;
-    let user = db::users::create(
-        &mut *tx,
-        shared::ids::new_id(),
-        &new_user.email,
-        &password_hash,
-        &new_user.display_name,
-    )
-    .await
-    .map_err(email_conflict)?;
-    let token = auth::start_session(&mut *tx, user.id, user_agent(&headers)).await?;
-    tx.commit().await?;
-
-    Ok((
-        StatusCode::CREATED,
-        AppendHeaders([(SET_COOKIE, auth::session_cookie(&token))]),
-        Json(UserResponse::new(user, &state)),
-    ))
+    let hash = hash_password(req.password).await?;
+    let user = db::users::create(&state.pool, &email, &hash, &display_name)
+        .await
+        .map_err(|e| {
+            if db::is_unique_violation(&e, db::users::EMAIL_KEY) {
+                ApiError::from(domain::Error::field("email", "e-mail já cadastrado"))
+            } else {
+                e.into()
+            }
+        })?;
+    start_session(&state, user, StatusCode::CREATED).await
 }
 
-async fn login(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(body): Json<LoginBody>,
-) -> Result<impl IntoResponse, ApiError> {
-    let credentials = match domain::users::normalize_email(&body.email) {
-        Ok(email) => db::users::find_credentials_by_email(&state.pool, &email).await?,
-        Err(_) => None,
-    };
-    let (user_id, hash) = match credentials {
-        Some(c) => (Some(c.id), c.password_hash),
-        None => (None, None),
-    };
-
-    // Verifica mesmo sem usuário (hash fictício) para não vazar quais e-mails existem.
-    let valid = auth::verify_password(body.password, hash).await?;
-    let user_id = user_id
-        .filter(|_| valid)
-        .ok_or(ApiError::InvalidCredentials)?;
-
-    db::sessions::delete_expired_for_user(&state.pool, user_id).await?;
-    let token = auth::start_session(&state.pool, user_id, user_agent(&headers)).await?;
-    let user = db::users::find(&state.pool, user_id)
-        .await?
-        .ok_or(ApiError::InvalidCredentials)?;
-
-    Ok((
-        AppendHeaders([(SET_COOKIE, auth::session_cookie(&token))]),
-        Json(UserResponse::new(user, &state)),
-    ))
-}
-
-/// Idempotente: sem sessão válida, só limpa o cookie.
-async fn logout(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<impl IntoResponse, ApiError> {
-    if let Some(token) = auth::session_token(&headers) {
-        db::sessions::delete_by_token_hash(&state.pool, &auth::hash_token(token)).await?;
+async fn login(State(state): State<AppState>, Json(req): Json<LoginReq>) -> ApiResult<Response> {
+    let creds = db::users::find_credentials(&state.pool, &normalize_email(&req.email)).await?;
+    let hash = creds.as_ref().and_then(|c| c.password_hash.clone());
+    if !verify_password(req.password, hash).await? {
+        return Err(ApiError::InvalidCredentials);
     }
-    Ok((
-        StatusCode::NO_CONTENT,
-        AppendHeaders([(SET_COOKIE, auth::clear_session_cookie())]),
-    ))
+    let user = creds.ok_or(ApiError::InvalidCredentials)?.user;
+    start_session(&state, user, StatusCode::OK).await
 }
 
-async fn me(State(state): State<AppState>, user: AuthUser) -> Result<Json<UserResponse>, ApiError> {
-    let row = db::users::find(&state.pool, user.user_id)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
-    Ok(Json(UserResponse::new(row, &state)))
+async fn start_session(state: &AppState, user: User, status: StatusCode) -> ApiResult<Response> {
+    let (token, token_hash) = new_session_token();
+    db::sessions::create(&state.pool, user.id, &token_hash, Utc::now() + SESSION_TTL).await?;
+    let mut headers = HeaderMap::new();
+    headers.insert(header::SET_COOKIE, session_cookie(&state.config, &token)?);
+    Ok((status, headers, Json(UserDto::from(user))).into_response())
 }
 
-fn user_agent(headers: &HeaderMap) -> Option<&str> {
-    headers.get(USER_AGENT).and_then(|v| v.to_str().ok())
-}
-
-fn email_conflict(err: sqlx::Error) -> ApiError {
-    let is_email_dup = err
-        .as_database_error()
-        .is_some_and(|e| e.constraint() == Some("users_email_key"));
-    if is_email_dup {
-        DomainError::Conflict("e-mail já cadastrado".to_owned()).into()
-    } else {
-        err.into()
+async fn logout(State(state): State<AppState>, req_headers: HeaderMap) -> ApiResult<Response> {
+    if let Some(token) = session_token(&req_headers) {
+        db::sessions::delete(&state.pool, &hash_token(token)).await?;
     }
+    let mut headers = HeaderMap::new();
+    headers.insert(header::SET_COOKIE, clear_cookie(&state.config)?);
+    Ok((StatusCode::NO_CONTENT, headers).into_response())
+}
+
+async fn me(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> ApiResult<Json<MeDto>> {
+    let guilds = db::guilds::user_guilds(&state.pool, user.id)
+        .await?
+        .into_iter()
+        .map(|g| MyGuildDto {
+            slug: g.slug,
+            name: g.name,
+            tag: g.tag,
+            is_owner: g.is_owner,
+            rank_name: g.rank_name,
+        })
+        .collect();
+    Ok(Json(MeDto {
+        is_superadmin: state.config.is_superadmin(&user.email),
+        user: user.into(),
+        guilds,
+    }))
 }

@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "-p", "api"],
+      "cwd": "backend",
+      "port": 8080
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "dev"],
+      "port": 5173,
+      "url": "http://app.guildos.localhost:5173"
+    }
+  ]
+}
