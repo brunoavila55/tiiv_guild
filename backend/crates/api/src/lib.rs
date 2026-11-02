@@ -1,5 +1,6 @@
 //! API HTTP (Axum): rotas, extractors e middlewares.
 
+pub mod auth;
 pub mod config;
 pub mod error;
 pub mod features;

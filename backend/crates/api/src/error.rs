@@ -12,6 +12,9 @@ pub enum ApiError {
     #[error("não autenticado")]
     Unauthorized,
 
+    #[error("e-mail ou senha inválidos")]
+    InvalidCredentials,
+
     #[error("serviço indisponível")]
     Unavailable,
 
@@ -41,6 +44,7 @@ impl ApiError {
                 (StatusCode::UNPROCESSABLE_ENTITY, "validation_failed")
             }
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid_credentials"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
             Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
         }

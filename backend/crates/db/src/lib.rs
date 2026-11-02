@@ -6,6 +6,9 @@ use sqlx::migrate::Migrator;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Executor, Postgres, Transaction};
 
+pub mod sessions;
+pub mod users;
+
 pub use sqlx::types::Uuid;
 pub use sqlx::PgPool;
 
