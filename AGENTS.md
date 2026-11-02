@@ -40,7 +40,7 @@ O core **não conhece nenhum jogo**. Não existe tabela, coluna, seed, enum ou t
 | Banco | PostgreSQL 16+, migrations `sqlx migrate` (aplicadas pela API ao subir) |
 | Auth | Sessão em cookie HttpOnly + tabela `sessions` (token aleatório, só o SHA-256 no banco); senha com argon2. Discord OAuth planejado |
 | Frontend | React + TypeScript + Vite, TanStack Router, TanStack Query, Tailwind v4, react-hook-form + zod |
-| Storage | S3-compatível (MinIO em dev) — entra com o upload de branding |
+| Storage | `object_store`: `STORAGE=local` (disco, servido pela API em `/api/media/…`; padrão em dev e no VPS) ou `STORAGE=s3` (S3/MinIO com bucket público) |
 | Infra | Docker, Traefik (TLS wildcard `*.tiiv.com.br`), GitHub Actions → GHCR → VPS. **Não usar Supabase/BaaS.** |
 | Contrato API | Tipos TS escritos à mão em `frontend/src/lib/api/types.ts` por enquanto; OpenAPI (`utoipa`) + client gerado quando a API estabilizar |
 

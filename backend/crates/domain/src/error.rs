@@ -23,6 +23,36 @@ impl Error {
     }
 }
 
+/// Acumula erros de campo enquanto extrai os valores já normalizados.
+#[derive(Default)]
+pub struct Validator(FieldErrors);
+
+impl Validator {
+    /// Valor normalizado, ou o padrão de `T` se inválido (o erro fica acumulado).
+    /// Só para validadores de campo, que só devolvem `Error::Validation`.
+    pub fn check<T: Default>(&mut self, result: Result<T, Error>) -> T {
+        match result {
+            Ok(v) => v,
+            Err(Error::Validation(f)) => {
+                self.0.extend(f);
+                T::default()
+            }
+            Err(other) => {
+                self.0.insert("_".into(), other.to_string());
+                T::default()
+            }
+        }
+    }
+
+    pub fn finish(self) -> Result<(), Error> {
+        if self.0.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Validation(self.0))
+        }
+    }
+}
+
 /// Junta erros de vários campos num único `Error::Validation`.
 pub fn collect(results: impl IntoIterator<Item = Result<(), Error>>) -> Result<(), Error> {
     let mut fields = FieldErrors::new();

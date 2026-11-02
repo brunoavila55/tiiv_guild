@@ -9,7 +9,14 @@
   --color-fg: #e8e9ed;
   --color-muted: #8b90a0;
   --color-danger: #f0616d;
-  /* Sobrescritas pelo layout do tenant com as cores da guilda. */
+  --color-primary: #7c6cf2;
+  --color-secondary: #34c3a0;
+}
+
+/* Layout do tenant: as cores da guilda (--guild-*) viram as cores do tema. Precisa ser
+   declarado no próprio elemento: um var() resolvido no :root não enxerga variáveis
+   definidas mais abaixo na árvore. */
+[data-guild-theme] {
   --color-primary: var(--guild-primary, #7c6cf2);
   --color-secondary: var(--guild-secondary, #34c3a0);
 }

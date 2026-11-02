@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod features;
 pub mod host;
+pub mod media;
 pub mod state;
 pub mod tenant;
 

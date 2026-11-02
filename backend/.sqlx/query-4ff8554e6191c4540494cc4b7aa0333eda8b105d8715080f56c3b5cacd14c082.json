@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE guild_branding SET logo_url = $1 WHERE guild_id = app_current_guild_id()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ff8554e6191c4540494cc4b7aa0333eda8b105d8715080f56c3b5cacd14c082"
+}

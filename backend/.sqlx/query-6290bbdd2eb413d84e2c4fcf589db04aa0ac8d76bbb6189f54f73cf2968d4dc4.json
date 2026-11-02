@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE guild_branding\n              SET primary_color = $1, secondary_color = $2, motto = $3, description_md = $4,\n                  public_page_enabled = $5, socials = $6\n            WHERE guild_id = app_current_guild_id()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6290bbdd2eb413d84e2c4fcf589db04aa0ac8d76bbb6189f54f73cf2968d4dc4"
+}

@@ -16,3 +16,6 @@ frontend/dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# uploads locais (STORAGE=local)
+backend/data/

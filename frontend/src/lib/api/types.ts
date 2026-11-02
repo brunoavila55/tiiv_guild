@@ -52,6 +52,24 @@ export interface Guild {
   };
 }
 
+export const SOCIAL_KEYS = [
+  "discord", "website", "youtube", "twitch", "instagram", "x", "tiktok", "facebook",
+] as const;
+export type SocialKey = (typeof SOCIAL_KEYS)[number];
+
+export interface Branding {
+  logo_url: string | null;
+  banner_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  motto: string | null;
+  description_md: string | null;
+  public_page_enabled: boolean;
+  socials: Partial<Record<SocialKey, string>>;
+}
+
+export type ImageSlot = "logo" | "banner";
+
 export interface Member {
   id: string;
   nickname: string;

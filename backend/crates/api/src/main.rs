@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("bind em {}", config.bind_addr))?;
     tracing::info!(addr = %config.bind_addr, base_domain = %config.base_domain, "API no ar");
 
-    axum::serve(listener, api::app(AppState::new(pool, config)))
+    axum::serve(listener, api::app(AppState::new(pool, config)?))
         .with_graceful_shutdown(async {
             tokio::signal::ctrl_c().await.ok();
         })

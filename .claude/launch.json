@@ -6,7 +6,8 @@
       "runtimeExecutable": "cargo",
       "runtimeArgs": ["run", "-p", "api"],
       "cwd": "backend",
-      "port": 8080
+      "port": 8080,
+      "autoPort": false
     },
     {
       "name": "web",

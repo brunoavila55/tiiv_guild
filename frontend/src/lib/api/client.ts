@@ -18,11 +18,12 @@ interface ErrorBody {
 }
 
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const isForm = body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     method,
     credentials: "include",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => null);
@@ -35,6 +36,15 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
 
 export const get = <T>(path: string) => api<T>("GET", path);
 export const post = <T>(path: string, body: unknown = {}) => api<T>("POST", path, body);
+export const put = <T>(path: string, body: unknown) => api<T>("PUT", path, body);
+export const del = <T>(path: string) => api<T>("DELETE", path);
+
+/** Envia um arquivo no campo `file` (multipart). */
+export function upload<T>(path: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return api<T>("PUT", path, form);
+}
 
 /** Não tenta de novo em erros de cliente (401/403/404…). */
 export function retryUnlessClientError(failureCount: number, error: unknown) {

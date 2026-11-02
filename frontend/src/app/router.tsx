@@ -11,6 +11,7 @@ import { PageMessage } from "@/components/ui/card";
 import { AdminGuildsPage } from "@/features/admin/admin-guilds-page";
 import { LoginPage } from "@/features/auth/login-page";
 import { RegisterPage } from "@/features/auth/register-page";
+import { BrandingPage } from "@/features/guild-branding/branding-page";
 import { PanelHome } from "@/features/guild-panel/panel-home";
 import { TenantLayout } from "@/features/guild-panel/tenant-layout";
 import { PublicPage } from "@/features/guild-public/public-page";
@@ -68,7 +69,8 @@ function tenantRouter() {
   const publicPage = createRoute({ getParentRoute: () => root, path: "/", component: PublicPage });
   const panel = createRoute({ getParentRoute: () => root, path: "/painel", component: PanelHome });
   const members = createRoute({ getParentRoute: () => root, path: "/painel/membros", component: MembersPage });
-  return createRouter({ routeTree: root.addChildren([publicPage, panel, members]) });
+  const branding = createRoute({ getParentRoute: () => root, path: "/painel/visual", component: BrandingPage });
+  return createRouter({ routeTree: root.addChildren([publicPage, panel, members, branding]) });
 }
 
 function unknownRouter() {

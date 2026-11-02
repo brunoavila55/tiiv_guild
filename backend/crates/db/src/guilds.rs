@@ -177,6 +177,78 @@ pub async fn list_all(pool: &PgPool) -> sqlx::Result<Vec<(Guild, String)>> {
         .collect())
 }
 
+/// Campos editáveis do branding (as imagens têm endpoint próprio).
+pub struct BrandingUpdate<'a> {
+    pub primary_color: Option<&'a str>,
+    pub secondary_color: Option<&'a str>,
+    pub motto: Option<&'a str>,
+    pub description_md: Option<&'a str>,
+    pub public_page_enabled: bool,
+    pub socials: &'a serde_json::Value,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ImageSlot {
+    Logo,
+    Banner,
+}
+
+pub async fn update_branding(conn: &mut PgConnection, u: &BrandingUpdate<'_>) -> sqlx::Result<()> {
+    sqlx::query!(
+        r#"UPDATE guild_branding
+              SET primary_color = $1, secondary_color = $2, motto = $3, description_md = $4,
+                  public_page_enabled = $5, socials = $6
+            WHERE guild_id = app_current_guild_id()"#,
+        u.primary_color,
+        u.secondary_color,
+        u.motto,
+        u.description_md,
+        u.public_page_enabled,
+        u.socials,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Troca a URL de uma imagem e devolve a anterior (para apagar o arquivo antigo).
+pub async fn set_image(
+    conn: &mut PgConnection,
+    slot: ImageSlot,
+    url: Option<&str>,
+) -> sqlx::Result<Option<String>> {
+    // `FOR UPDATE` serializa trocas concorrentes da mesma imagem.
+    let previous = match slot {
+        ImageSlot::Logo => {
+            let old = sqlx::query_scalar!("SELECT logo_url FROM guild_branding FOR UPDATE")
+                .fetch_optional(&mut *conn)
+                .await?
+                .flatten();
+            sqlx::query!(
+                "UPDATE guild_branding SET logo_url = $1 WHERE guild_id = app_current_guild_id()",
+                url
+            )
+            .execute(&mut *conn)
+            .await?;
+            old
+        }
+        ImageSlot::Banner => {
+            let old = sqlx::query_scalar!("SELECT banner_url FROM guild_branding FOR UPDATE")
+                .fetch_optional(&mut *conn)
+                .await?
+                .flatten();
+            sqlx::query!(
+                "UPDATE guild_branding SET banner_url = $1 WHERE guild_id = app_current_guild_id()",
+                url
+            )
+            .execute(&mut *conn)
+            .await?;
+            old
+        }
+    };
+    Ok(previous)
+}
+
 /// Branding da guilda do tenant atual.
 pub async fn branding(conn: &mut PgConnection) -> sqlx::Result<Option<Branding>> {
     sqlx::query_as!(
