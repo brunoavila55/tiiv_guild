@@ -1,0 +1,62 @@
+# Stack de produção. Baixado pelo script `guildos-deploy` no servidor a cada deploy;
+# o Traefik (rede externa `edge`) termina TLS para *.tiiv.com.br.
+# Variáveis vêm de /opt/guildos/.env (geradas no servidor, nunca no repositório).
+name: guildos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-guildos}
+      POSTGRES_USER: ${POSTGRES_USER:-guildos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
+
+  api:
+    image: ghcr.io/brunoavila55/guildos-api:${IMAGE_TAG:?defina IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-guildos}
+      API_BIND_ADDR: 0.0.0.0:8080
+      RUST_LOG: ${RUST_LOG:-api=info,tower_http=info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.guildos-api.rule=HostRegexp(`^.+\.tiiv\.com\.br$$`) && PathPrefix(`/api`)
+      - traefik.http.routers.guildos-api.entrypoints=websecure
+      - traefik.http.routers.guildos-api.priority=20
+      - traefik.http.services.guildos-api.loadbalancer.server.port=8080
+    networks:
+      - internal
+      - edge
+
+  web:
+    image: ghcr.io/brunoavila55/guildos-web:${IMAGE_TAG:?defina IMAGE_TAG}
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.guildos-web.rule=HostRegexp(`^.+\.tiiv\.com\.br$$`)
+      - traefik.http.routers.guildos-web.entrypoints=websecure
+      - traefik.http.routers.guildos-web.priority=10
+      - traefik.http.services.guildos-web.loadbalancer.server.port=80
+    networks:
+      - edge
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+  edge:
+    external: true
