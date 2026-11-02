@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id, s.slug, s.name, s.region, s.active,\n                  COALESCE(array_agg(sc.class_id) FILTER (WHERE sc.class_id IS NOT NULL), '{}') AS \"class_ids!\"\n           FROM game_servers s\n           LEFT JOIN game_server_classes sc ON sc.server_id = s.id\n           WHERE s.game_id = $1 AND (s.active OR $2)\n           GROUP BY s.id\n           ORDER BY s.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "class_ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "ad7b6a95556e9f79313b047943b77863a219318eec49dfb3db98971a00b3a667"
+}

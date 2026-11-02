@@ -30,13 +30,12 @@ services:
       - miniodata:/data
 
   api:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    build: ./backend
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-guildos}
       API_BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-api=info,tower_http=info}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
     depends_on:
       postgres:
         condition: service_healthy

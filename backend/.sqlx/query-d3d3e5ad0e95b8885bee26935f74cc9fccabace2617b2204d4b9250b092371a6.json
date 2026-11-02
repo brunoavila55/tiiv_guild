@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, slug, name, active, level_min, level_max, character_schema, default_ranks\n           FROM games WHERE slug = $1 AND (active OR $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "level_min",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "level_max",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "character_schema",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "default_ranks",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d3d3e5ad0e95b8885bee26935f74cc9fccabace2617b2204d4b9250b092371a6"
+}

@@ -1,6 +1,6 @@
 # CLAUDE.md — GuildOS (nome provisório)
 
-SaaS **ERP para guildas de MMORPG**, multi-tenant. Primeiro jogo suportado: **Perfect World** (PW). A arquitetura é **game-agnostic** desde o dia 1: tudo que é específico de jogo vive em um *game pack* (dados + regras), nunca hardcoded no core.
+SaaS **ERP para guildas de MMORPG**, multi-tenant. Primeiro jogo usado: **Perfect World** (PW), mas o produto **não é um gerenciador de PW**. A arquitetura é **game-agnostic** desde o dia 1: tudo que é específico de jogo é **dado do catálogo**, cadastrado pelo superadmin da plataforma (jogos, classes, servidores, campos de personagem, ranks padrão), nunca hardcoded no core nem em seeds do repositório.
 
 > Leia este arquivo inteiro antes de qualquer tarefa. Em caso de conflito entre este arquivo e um pedido pontual, pergunte.
 
@@ -38,19 +38,19 @@ SaaS **ERP para guildas de MMORPG**, multi-tenant. Primeiro jogo suportado: **Pe
 │   │   ├── api/                # binário Axum: rotas, extractors, middlewares
 │   │   ├── domain/             # entidades, regras, erros de domínio (sem IO)
 │   │   ├── db/                 # repositórios SQLx, migrations
-│   │   ├── games/              # trait GamePack + implementações (perfect_world/, ...)
+│   │   ├── games/              # regras genéricas do catálogo: validação de definição de jogo e character_schema
 │   │   └── shared/             # tipos comuns (ids, paginação, erros)
 │   └── migrations/
 ├── frontend/
 │   └── src/
 │       ├── app/                # rotas, layout, providers
-│       ├── features/           # guild-branding/, members/, characters/, ... (1 pasta por feature)
+│       ├── features/           # guild-branding/, members/, characters/, admin-catalog/, ... (1 pasta por feature)
 │       ├── components/ui/      # shadcn
-│       ├── lib/api/            # client gerado + hooks TanStack Query
-│       └── games/              # metadata visual por jogo (ícones de classe, cores)
-└── game-packs/
-    └── perfect_world/          # seeds: classes, raças, servidores, ranks padrão (YAML/JSON)
+│       └── lib/api/            # client gerado + hooks TanStack Query
+└── deploy/                     # compose de produção + script de deploy do VPS
 ```
+
+Visual por jogo/classe (ícones, cores) também é dado do catálogo (`metadata` jsonb), não pasta no frontend.
 
 Regra: **uma feature = um módulo** no backend (`api/src/features/<feature>/`) e uma pasta em `frontend/src/features/<feature>/`. Features futuras (events, raids, dungeons) entram como novos módulos sem tocar nos existentes.
 
@@ -62,16 +62,18 @@ Regra: **uma feature = um módulo** no backend (`api/src/features/<feature>/`) e
   - Policies: `USING (guild_id = current_setting('app.guild_id')::uuid)`.
   - A role da aplicação **não** é owner das tabelas (RLS não é bypassado).
 - Resolução do tenant: rota `/api/guilds/{guild_slug}/...` → extractor `TenantCtx { guild_id, member_id, permissions }` que valida que o usuário é membro.
-- Tabelas globais (sem `guild_id`): `users`, `sessions`, `games`, `game_classes`, `game_servers`, `plans`.
+- Tabelas globais (sem `guild_id`): `users`, `sessions`, `games`, `game_classes`, `game_servers`, `game_server_classes`, `plans`.
 - **Nunca** escrever query de tenant sem passar pelo `TenantCtx`. Testes devem provar isolamento entre guildas.
 
 ## 5. Modelo de dados (base)
 
 ```text
 users(id, email, password_hash, display_name, avatar_url, created_at)
-games(id, slug, name, active)                                  -- 'perfect-world'
-game_classes(id, game_id, slug, name, role_hint, metadata jsonb) -- role_hint: tank|healer|dps|support
-game_servers(id, game_id, slug, name, region)
+games(id, slug, name, active, level_min, level_max,
+      character_schema jsonb, default_ranks jsonb, created_at)  -- tudo cadastrado pelo superadmin
+game_classes(id, game_id, slug, name, role_hint, metadata jsonb, active) -- role_hint: tank|healer|dps|support
+game_servers(id, game_id, slug, name, region, active)
+game_server_classes(game_id, server_id, class_id)  -- classes de um servidor (versões do jogo); vazio = todas
 
 guilds(id, game_id, server_id, slug UNIQUE, name, tag, faction,
        created_at, owner_user_id, plan_id)
@@ -82,7 +84,7 @@ guild_ranks(id, guild_id, name, position, permissions text[])   -- ex: Líder, V
 guild_members(id, guild_id, user_id NULL, nickname, rank_id, status,  -- active|trial|inactive|left|banned
               joined_at, left_at, notes)
 characters(id, guild_id, member_id, game_class_id, name, level, is_main,
-           attributes jsonb, created_at, updated_at)            -- attributes = campos do game pack
+           attributes jsonb, created_at, updated_at)            -- attributes = campos do character_schema do jogo
 member_history(id, guild_id, member_id, actor_member_id, action, payload jsonb, at)
 
 -- Reservado p/ futuro (NÃO criar ainda, só respeitar o design):
@@ -92,31 +94,26 @@ member_history(id, guild_id, member_id, actor_member_id, action, payload jsonb, 
 
 Regras de dados:
 - IDs: UUID v7. Timestamps `timestamptz`. Soft delete só onde há histórico (membros).
-- Campos específicos de jogo (cultivo, reino, ataque/defesa no PW etc.) vão em `attributes jsonb`, **validados pelo GamePack** — nunca colunas dedicadas no core.
+- Campos específicos de jogo (cultivo, reino, ataque/defesa no PW etc.) vão em `attributes jsonb`, **validados pelo `character_schema` do jogo** — nunca colunas dedicadas no core.
+- Itens do catálogo não são apagados (podem estar referenciados): usa-se `active = false`.
 - Usuário (conta) ≠ membro (vínculo com guilda) ≠ personagem. Um membro pode existir sem conta (`user_id NULL`) para o líder cadastrar players que não usam o sistema.
 
-## 6. Abstração de jogo (`GamePack`)
+## 6. Catálogo de jogos (superadmin)
 
-```rust
-pub trait GamePack: Send + Sync {
-    fn slug(&self) -> &'static str;                       // "perfect-world"
-    fn character_schema(&self) -> &serde_json::Value;     // JSON Schema de `attributes`
-    fn validate_character(&self, attrs: &serde_json::Value) -> Result<(), DomainError>;
-    fn default_ranks(&self) -> Vec<RankSeed>;
-    fn level_range(&self) -> (i32, i32);
-    // futuro: activity_kinds(), default_party_composition() ...
-}
-```
-
-- Registrado num `GameRegistry` carregado no startup; seeds de `game-packs/<jogo>/` populam `game_classes` / `game_servers`.
-- Frontend renderiza o formulário de personagem a partir de `character_schema` (campos dinâmicos) + metadata visual em `frontend/src/games/<jogo>`.
-- Adicionar um jogo novo = novo game pack + seeds + assets. **Zero mudança no core.** Isso é critério de aceite da arquitetura.
+- O **superadmin da plataforma** cadastra e edita pelo painel (`/api/admin/games/...`): jogos (faixa de nível, `character_schema`, ranks padrão), classes e servidores. Classes e servidores mudam por jogo **e por versão do jogo** (servidores privados), por isso são dados, nunca código.
+- Superadmin = e-mails em `SUPERADMIN_EMAILS` (config do servidor). Extractor `SuperAdmin` (401 sem sessão, 403 sem o papel). `/api/me` expõe `is_superadmin`.
+- `character_schema`: subconjunto de JSON Schema (`string`/`integer`/`number`/`boolean`, `enum`, `minimum`/`maximum`, `minLength`/`maxLength`, `required`, `additionalProperties: false`; `title`/`x-enumLabels` para a UI), validado ao salvar e usado para validar `attributes` (crate `games`). A ordem das propriedades é a ordem do formulário.
+- `default_ranks`: ranks criados em toda guilda nova do jogo; o rank do topo (menor `position`) precisa de todas as permissões.
+- Leitura pública: `GET /api/games` e `GET /api/games/{slug}` (só itens ativos).
+- Frontend renderiza o formulário de personagem a partir de `character_schema`.
+- Adicionar um jogo novo = **cadastro no painel. Zero mudança de código.** Isso é critério de aceite da arquitetura.
 
 ## 7. Permissões
 
 - Permissões granulares por rank (strings): `guild.branding.edit`, `members.view`, `members.manage`, `members.kick`, `ranks.manage`, `characters.manage_own`, `characters.manage_any`.
 - Futuras: `events.*`, `raids.*`, `dungeons.*` — adicionar ao enum, não refatorar.
 - Dono da guilda tem todas. Checagem sempre no backend via `TenantCtx::require(perm)`.
+- Superadmin é papel da **plataforma** (catálogo de jogos), não da guilda: não dá acesso a dados de tenant.
 
 ## 8. Convenções de código
 
@@ -166,10 +163,10 @@ pnpm gen:api                               # regenera client a partir do OpenAPI
    - Aceite: teste prova que query sem `app.guild_id` não retorna linhas de tenant; teste de isolamento A/B passa.
 3. **Auth**: registro, login, logout, `/me`, sessão por cookie.
    - Aceite: senha com argon2; cookie HttpOnly+Secure+SameSite=Lax; rota protegida retorna 401 sem sessão.
-4. **GamePack + seed Perfect World**: trait, registry, seeds de classes/servidores/ranks padrão.
-   - Aceite: `GET /api/games/perfect-world` retorna classes e `character_schema`; um game pack fake de teste registra sem alterar o core.
+4. **Catálogo de jogos pelo superadmin**: CRUD de jogos/classes/servidores (com filtro de classes por servidor), `character_schema` e ranks padrão por jogo.
+   - Aceite: superadmin cadastra um jogo e `GET /api/games/{slug}` retorna classes e `character_schema`; um segundo jogo entra só por cadastro; não-superadmin recebe 403.
 5. **Criação de guilda + TenantCtx**: criar guilda escolhendo jogo/servidor; criador vira dono; ranks padrão criados.
-   - Aceite: extractor rejeita não-membro com 403; slug único; ranks do game pack aplicados.
+   - Aceite: extractor rejeita não-membro com 403; slug único; ranks padrão do jogo aplicados.
 
 ### P1 — MVP (visual + players)
 1. **Visual da guilda**: editar logo, banner (upload S3), cores, tema, lema, descrição (markdown), redes sociais.
@@ -195,7 +192,7 @@ pnpm gen:api                               # regenera client a partir do OpenAPI
 ### P3 — Expansão
 1. Raids e dungeons (composição por `role_hint`, lista de espera, presença).
 2. DKP/pontos de presença e loot.
-3. Segundo game pack (validar a abstração na prática).
+3. Segundo jogo em uso real (validar o catálogo na prática).
 4. Planos/billing por guilda, limites por plano.
 5. Dashboard de métricas da guilda (atividade, crescimento, distribuição de classes).
 
@@ -203,7 +200,8 @@ pnpm gen:api                               # regenera client a partir do OpenAPI
 
 ## 12. O que NÃO fazer
 
-- Não criar colunas específicas de Perfect World no core.
+- Não criar colunas específicas de Perfect World (ou de qualquer jogo) no core.
+- Não colocar dados de jogo (classes, servidores, campos) no código ou em seeds: é cadastro do superadmin.
 - Não implementar eventos/raids/dungeons antes do P1 estar fechado.
 - Não usar Supabase nem BaaS equivalente.
 - Não acessar dados de tenant fora do `TenantCtx`.

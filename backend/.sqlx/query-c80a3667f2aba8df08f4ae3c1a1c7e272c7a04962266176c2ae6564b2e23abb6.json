@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, slug, name, role_hint, metadata FROM game_classes WHERE game_id = $1 ORDER BY name",
+  "query": "UPDATE game_classes SET name = $3, role_hint = $4, metadata = $5, active = $6\n           WHERE game_id = $1 AND slug = $2\n           RETURNING id, slug, name, role_hint, metadata, active",
   "describe": {
     "columns": [
       {
@@ -27,11 +27,21 @@
         "ordinal": 4,
         "name": "metadata",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Bool"
       ]
     },
     "nullable": [
@@ -39,8 +49,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "14fa059a0caf0511f6028bd100bcfb221e909c15ead67c3974fa2c18e0cdd11e"
+  "hash": "c80a3667f2aba8df08f4ae3c1a1c7e272c7a04962266176c2ae6564b2e23abb6"
 }

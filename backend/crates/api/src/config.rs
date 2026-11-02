@@ -6,6 +6,8 @@ use anyhow::Context;
 pub struct Config {
     pub database_url: String,
     pub bind_addr: SocketAddr,
+    /// `SUPERADMIN_EMAILS`: e-mails separados por vírgula com acesso ao painel da plataforma.
+    pub superadmin_emails: Vec<String>,
 }
 
 impl Config {
@@ -15,10 +17,17 @@ impl Config {
             .unwrap_or_else(|_| "0.0.0.0:8080".to_owned())
             .parse()
             .context("API_BIND_ADDR inválido")?;
+        let superadmin_emails = std::env::var("SUPERADMIN_EMAILS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|e| e.trim().to_owned())
+            .filter(|e| !e.is_empty())
+            .collect();
 
         Ok(Self {
             database_url,
             bind_addr,
+            superadmin_emails,
         })
     }
 }

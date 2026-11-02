@@ -11,6 +11,7 @@ use axum::http::request::Parts;
 use axum::http::HeaderMap;
 use chrono::{Duration, Utc};
 use db::Uuid;
+use domain::DomainError;
 use sha2::{Digest, Sha256};
 use sqlx::PgExecutor;
 
@@ -38,6 +39,30 @@ impl FromRequestParts<AppState> for AuthUser {
             user_id: session.user_id,
             session_id: session.session_id,
         })
+    }
+}
+
+/// Usuário logado cujo e-mail está em `SUPERADMIN_EMAILS`. 401 sem sessão, 403 sem o papel.
+#[derive(Debug, Clone, Copy)]
+pub struct SuperAdmin {
+    pub user_id: Uuid,
+}
+
+impl FromRequestParts<AppState> for SuperAdmin {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        let user = AuthUser::from_request_parts(parts, state).await?;
+        let row = db::users::find(&state.pool, user.user_id)
+            .await?
+            .ok_or(ApiError::Unauthorized)?;
+        if state.is_superadmin(&row.email) {
+            Ok(Self {
+                user_id: user.user_id,
+            })
+        } else {
+            Err(DomainError::Forbidden.into())
+        }
     }
 }
 

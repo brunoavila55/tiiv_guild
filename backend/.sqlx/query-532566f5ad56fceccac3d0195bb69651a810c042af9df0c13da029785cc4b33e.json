@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, slug, name FROM games WHERE active ORDER BY name",
+  "query": "SELECT id, slug FROM game_classes WHERE game_id = $1 AND slug = ANY($2)",
   "describe": {
     "columns": [
       {
@@ -12,21 +12,18 @@
         "ordinal": 1,
         "name": "slug",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 2,
-        "name": "name",
-        "type_info": "Text"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
     },
     "nullable": [
-      false,
       false,
       false
     ]
   },
-  "hash": "f036dec8f9aaa21184e63dddeb5d85b66c35d022a87ab7f3b244cbc29e17032f"
+  "hash": "532566f5ad56fceccac3d0195bb69651a810c042af9df0c13da029785cc4b33e"
 }

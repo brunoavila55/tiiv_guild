@@ -18,22 +18,20 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let games = games::GameRegistry::builtin().context("game packs inválidos")?;
-    {
-        let mut owner = db::connect_owner(&config.database_url)
-            .await
-            .context("falha ao conectar no banco")?;
-        db::migrate(&mut owner)
-            .await
-            .context("falha ao aplicar migrations")?;
-        api::features::games::sync_catalog(&mut owner, &games)
-            .await
-            .context("falha ao sincronizar o catálogo de jogos")?;
-    }
-    tracing::info!("migrations aplicadas e catálogo de jogos sincronizado");
+    let mut owner = db::connect_owner(&config.database_url)
+        .await
+        .context("falha ao conectar no banco")?;
+    db::migrate(&mut owner)
+        .await
+        .context("falha ao aplicar migrations")?;
+    drop(owner);
+    tracing::info!(
+        superadmins = config.superadmin_emails.len(),
+        "migrations aplicadas"
+    );
 
     let pool = db::connect_lazy(&config.database_url).context("DATABASE_URL inválida")?;
-    let app = api::router(AppState::new(pool, games));
+    let app = api::router(AppState::new(pool).with_superadmins(&config.superadmin_emails));
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await

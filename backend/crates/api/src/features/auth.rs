@@ -43,11 +43,14 @@ struct UserResponse {
     display_name: String,
     avatar_url: Option<String>,
     created_at: DateTime<Utc>,
+    /// Acesso ao painel da plataforma (catálogo de jogos).
+    is_superadmin: bool,
 }
 
-impl From<UserRow> for UserResponse {
-    fn from(row: UserRow) -> Self {
+impl UserResponse {
+    fn new(row: UserRow, state: &AppState) -> Self {
         Self {
+            is_superadmin: state.is_superadmin(&row.email),
             id: row.id,
             email: row.email,
             display_name: row.display_name,
@@ -82,7 +85,7 @@ async fn register(
     Ok((
         StatusCode::CREATED,
         AppendHeaders([(SET_COOKIE, auth::session_cookie(&token))]),
-        Json(UserResponse::from(user)),
+        Json(UserResponse::new(user, &state)),
     ))
 }
 
@@ -114,7 +117,7 @@ async fn login(
 
     Ok((
         AppendHeaders([(SET_COOKIE, auth::session_cookie(&token))]),
-        Json(UserResponse::from(user)),
+        Json(UserResponse::new(user, &state)),
     ))
 }
 
@@ -136,7 +139,7 @@ async fn me(State(state): State<AppState>, user: AuthUser) -> Result<Json<UserRe
     let row = db::users::find(&state.pool, user.user_id)
         .await?
         .ok_or(ApiError::Unauthorized)?;
-    Ok(Json(row.into()))
+    Ok(Json(UserResponse::new(row, &state)))
 }
 
 fn user_agent(headers: &HeaderMap) -> Option<&str> {
