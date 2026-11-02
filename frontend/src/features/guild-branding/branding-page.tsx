@@ -7,6 +7,7 @@ import { t } from "@/app/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, FormError, PageMessage } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { Markdown } from "@/components/ui/markdown";
 import { useBrandingPreview } from "@/features/guild-panel/branding-preview";
 import { PanelGate } from "@/features/guild-panel/panel-gate";
 import { useTenant } from "@/features/guild-panel/use-tenant";
@@ -127,7 +128,7 @@ function BrandingEditor({ saved }: { saved: Branding }) {
       resetImages();
       form.reset(toForm(b));
       qc.setQueryData(brandingKey, b);
-      await qc.invalidateQueries({ queryKey: ["tenant"] });
+      await Promise.all([qc.invalidateQueries({ queryKey: ["tenant"] }), qc.invalidateQueries({ queryKey: ["public"] })]);
       setFormError(null);
       setNotice(t.branding.saved);
     },
@@ -215,7 +216,7 @@ function BrandingEditor({ saved }: { saved: Branding }) {
                 <p className="text-lg font-semibold">{name}</p>
                 {values.motto.trim() && <p className="text-sm text-primary">{values.motto.trim()}</p>}
               </div>
-              {values.description_md.trim() && <p className="line-clamp-6 whitespace-pre-wrap text-sm text-muted">{values.description_md.trim()}</p>}
+              {values.description_md.trim() && <Markdown source={values.description_md} className="line-clamp-6 gap-2 text-sm text-muted" />}
               {socials.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {socials.map((k) => (

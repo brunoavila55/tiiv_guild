@@ -85,6 +85,27 @@ pub async fn list(conn: &mut PgConnection) -> sqlx::Result<Vec<Member>> {
         .collect()
 }
 
+/// Membro como aparece na página pública: só apelido e rank.
+#[derive(Debug, Clone)]
+pub struct PublicMember {
+    pub nickname: String,
+    pub rank_id: Uuid,
+    pub rank_name: String,
+}
+
+/// Membros ativos, do topo da hierarquia para baixo.
+pub async fn public_roster(conn: &mut PgConnection) -> sqlx::Result<Vec<PublicMember>> {
+    sqlx::query_as!(
+        PublicMember,
+        r#"SELECT m.nickname, m.rank_id, r.name AS rank_name
+             FROM guild_members m JOIN guild_ranks r ON r.id = m.rank_id
+            WHERE m.status = 'active'
+            ORDER BY r.position, lower(m.nickname)"#
+    )
+    .fetch_all(conn)
+    .await
+}
+
 pub async fn ranks(conn: &mut PgConnection) -> sqlx::Result<Vec<Rank>> {
     sqlx::query_as!(
         Rank,

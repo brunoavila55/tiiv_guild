@@ -70,6 +70,23 @@ export interface Branding {
 
 export type ImageSlot = "logo" | "banner";
 
+/** Página pública da guilda: só o que ela publicou, sem nada privado dos membros. */
+export interface PublicPage {
+  slug: string;
+  name: string;
+  tag: string | null;
+  created_at: string;
+  logo_url: string | null;
+  banner_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  motto: string | null;
+  description_md: string | null;
+  socials: Partial<Record<SocialKey, string>>;
+  member_count: number;
+  ranks: { name: string; members: string[] }[];
+}
+
 export interface Member {
   id: string;
   nickname: string;

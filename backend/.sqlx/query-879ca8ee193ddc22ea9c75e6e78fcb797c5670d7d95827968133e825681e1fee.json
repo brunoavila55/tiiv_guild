@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.nickname, m.rank_id, r.name AS rank_name\n             FROM guild_members m JOIN guild_ranks r ON r.id = m.rank_id\n            WHERE m.status = 'active'\n            ORDER BY r.position, lower(m.nickname)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nickname",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "rank_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "rank_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "879ca8ee193ddc22ea9c75e6e78fcb797c5670d7d95827968133e825681e1fee"
+}

@@ -7,6 +7,7 @@ mod guilds;
 mod health;
 mod media;
 mod members;
+mod public;
 mod tenant;
 
 use axum::Router;
@@ -21,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .merge(tenant::router())
         .merge(members::router())
         .merge(branding::router())
+        .merge(public::router())
         .merge(media::router())
         .merge(admin::router())
 }
