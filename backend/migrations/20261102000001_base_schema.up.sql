@@ -12,8 +12,14 @@
 
 DO $$
 BEGIN
+    -- O papel é do cluster: bancos migrando em paralelo (ex.: `sqlx::test`) podem
+    -- disputar a criação, então "já existe" não é erro.
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'guildos_app') THEN
-        CREATE ROLE guildos_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+        BEGIN
+            CREATE ROLE guildos_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+        EXCEPTION
+            WHEN duplicate_object OR unique_violation THEN NULL;
+        END;
     END IF;
     -- O dono precisa poder fazer `SET ROLE guildos_app`.
     IF NOT pg_has_role(current_user, 'guildos_app', 'MEMBER') THEN
