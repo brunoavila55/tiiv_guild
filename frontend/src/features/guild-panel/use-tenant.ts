@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { get, retryUnlessClientError } from "@/lib/api/client";
-import type { Guild, Member, Tenant } from "@/lib/api/types";
+import type { Guild, Tenant } from "@/lib/api/types";
 
 /** Identidade pública da guilda do host atual. */
 export function useTenant() {
@@ -13,6 +13,3 @@ export function useGuild() {
   return useQuery({ queryKey: ["guild"], queryFn: () => get<Guild>("/guild"), retry: retryUnlessClientError });
 }
 
-export function useMembers() {
-  return useQuery({ queryKey: ["members"], queryFn: () => get<Member[]>("/members"), retry: retryUnlessClientError });
-}

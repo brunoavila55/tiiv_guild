@@ -39,6 +39,13 @@ pub async fn create(
     .await
 }
 
+/// Id da conta com esse e-mail (sem diferenciar maiúsculas).
+pub async fn find_id_by_email(pool: &PgPool, email: &str) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar!("SELECT id FROM users WHERE lower(email) = lower($1)", email)
+        .fetch_optional(pool)
+        .await
+}
+
 pub async fn find_credentials(pool: &PgPool, email: &str) -> sqlx::Result<Option<Credentials>> {
     let row = sqlx::query!(
         r#"SELECT id, email, display_name, avatar_url, created_at, password_hash

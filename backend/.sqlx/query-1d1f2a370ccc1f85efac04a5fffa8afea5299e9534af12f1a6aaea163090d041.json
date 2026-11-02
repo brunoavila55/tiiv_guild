@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id, m.user_id, m.nickname, m.rank_id, r.name AS rank_name,\n                  m.status::text AS \"status!\", m.joined_at\n             FROM guild_members m JOIN guild_ranks r ON r.id = m.rank_id\n            WHERE m.status <> 'left'\n            ORDER BY r.position, lower(m.nickname)",
+  "query": "SELECT m.id, m.user_id, m.nickname, m.rank_id, r.name AS rank_name,\n                  m.status::text AS \"status!\", m.joined_at\n             FROM guild_members m JOIN guild_ranks r ON r.id = m.rank_id\n            WHERE (($1::text IS NULL AND m.status <> 'left') OR m.status::text = $1)\n              AND ($2::uuid IS NULL OR m.rank_id = $2)\n              AND ($3::text IS NULL OR m.nickname ILIKE $3)\n            ORDER BY r.position, lower(m.nickname), m.id\n            LIMIT $4 OFFSET $5",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,13 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
     },
     "nullable": [
       false,
@@ -52,5 +58,5 @@
       false
     ]
   },
-  "hash": "e6de3e571bd69dd4977c265c16e518e7a28de6c4f7295c58ec085cb93057e7c5"
+  "hash": "1d1f2a370ccc1f85efac04a5fffa8afea5299e9534af12f1a6aaea163090d041"
 }

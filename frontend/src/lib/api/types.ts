@@ -97,6 +97,46 @@ export interface Member {
   joined_at: string;
 }
 
+export interface MemberPage {
+  items: Member[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+/** Ficha do membro no painel. `notes` só vem para quem tem `members.manage`. */
+export interface MemberDetail {
+  id: string;
+  nickname: string;
+  has_account: boolean;
+  account_name: string | null;
+  is_owner: boolean;
+  rank_id: string;
+  rank_name: string;
+  status: MemberStatus;
+  notes: string | null;
+  joined_at: string;
+  left_at: string | null;
+  can_edit: boolean;
+  can_remove: boolean;
+}
+
+export interface Rank {
+  id: string;
+  name: string;
+  position: number;
+  permissions: string[];
+}
+
+/** `payload` de `member.updated`: campo → `{ from, to }` (notas só como `true`). */
+export interface HistoryEntry {
+  id: string;
+  action: string;
+  payload: Record<string, unknown>;
+  actor_nickname: string | null;
+  at: string;
+}
+
 export interface AdminGuild {
   slug: string;
   name: string;

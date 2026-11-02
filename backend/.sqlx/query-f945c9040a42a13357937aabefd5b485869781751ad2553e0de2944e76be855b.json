@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT h.id, h.action, h.payload, a.nickname AS \"actor_nickname?\", h.at\n             FROM member_history h\n             LEFT JOIN guild_members a ON a.id = h.actor_member_id\n            WHERE h.member_id = $1\n            ORDER BY h.at DESC, h.id DESC\n            LIMIT 200",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor_nickname?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f945c9040a42a13357937aabefd5b485869781751ad2553e0de2944e76be855b"
+}

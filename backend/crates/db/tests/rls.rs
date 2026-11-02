@@ -58,7 +58,11 @@ async fn tenants_are_isolated(opts: PgPoolOptions, conn: PgConnectOptions) -> sq
         .await?;
         assert_eq!(foreign, 0, "{table}");
     }
-    assert_eq!(members::list(&mut tx).await?.len(), 1);
+    let all = members::MemberFilter {
+        limit: 100,
+        ..Default::default()
+    };
+    assert_eq!(members::page(&mut tx, &all).await?.1, 1);
     assert_eq!(members::ranks(&mut tx).await?.len(), 4);
 
     // Escrever na guilda B com o tenant A falha (WITH CHECK).

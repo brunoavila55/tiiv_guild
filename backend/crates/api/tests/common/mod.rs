@@ -154,6 +154,11 @@ impl TestApp {
             .await
     }
 
+    pub async fn patch(&self, host: &str, path: &str, cookie: Option<&str>, body: Value) -> Res {
+        self.send(Method::PATCH, host, path, cookie, Some(body), None)
+            .await
+    }
+
     pub async fn delete(&self, host: &str, path: &str, cookie: Option<&str>) -> Res {
         self.send(Method::DELETE, host, path, cookie, None, None)
             .await

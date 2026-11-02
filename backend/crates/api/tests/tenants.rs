@@ -44,8 +44,8 @@ async fn creates_guild_with_owner_and_default_ranks(opts: PgPoolOptions, conn: P
     assert_eq!(names, vec!["Líder", "Oficial", "Membro", "Recruta"]);
 
     let members = app.get(&host, "/api/members", Some(&owner)).await;
-    assert_eq!(members.body.as_array().map(Vec::len), Some(1));
-    assert_eq!(members.body[0]["has_account"], true);
+    assert_eq!(members.body["total"], 1);
+    assert_eq!(members.body["items"][0]["has_account"], true);
 
     let me = app.get(APP, "/api/me", Some(&owner)).await;
     assert_eq!(me.body["guilds"][0]["slug"], "os-lobos");
@@ -151,8 +151,8 @@ async fn guilds_are_isolated_by_host(opts: PgPoolOptions, conn: PgConnectOptions
         .get(&guild_host("guilda-a"), "/api/members", Some(&ana))
         .await;
     assert_eq!(a.status, StatusCode::OK);
-    assert_eq!(a.body.as_array().map(Vec::len), Some(1));
-    assert_eq!(a.body[0]["nickname"], "Jogador");
+    assert_eq!(a.body["total"], 1);
+    assert_eq!(a.body["items"][0]["nickname"], "Jogador");
     assert_eq!(
         app.get(&guild_host("guilda-b"), "/api/members", Some(&ana))
             .await
