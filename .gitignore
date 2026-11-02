@@ -1,0 +1,18 @@
+# segredos
+.env
+.env.*
+!.env.example
+
+# rust
+backend/target/
+
+# node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# editores / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

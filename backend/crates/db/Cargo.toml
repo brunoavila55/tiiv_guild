@@ -1,0 +1,13 @@
+[package]
+name = "db"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain.workspace = true
+shared.workspace = true
+sqlx.workspace = true
+
+[lints]
+workspace = true

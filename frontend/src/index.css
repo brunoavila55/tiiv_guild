@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Cores da guilda: sobrescritas no layout do tenant a partir de guild_branding. */
+:root {
+  --guild-primary: #7c3aed;
+  --guild-secondary: #f59e0b;
+}
+
+@theme inline {
+  --color-guild-primary: var(--guild-primary);
+  --color-guild-secondary: var(--guild-secondary);
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+}
