@@ -15,6 +15,8 @@ cd backend && sqlx migrate run && cargo run -p api      # API em :8080 (GET /api
 cd frontend && pnpm install && pnpm dev                 # web em :5173 (proxy /api → :8080)
 ```
 
-Sem Docker: instale o PostgreSQL 16 nativo, crie a role `guildos` (`LOGIN CREATEDB`, necessário p/ `sqlx::test`) e o banco `guildos`, e aponte `DATABASE_URL` no `backend/.env`.
+Sem Docker: instale o PostgreSQL 16 nativo, crie a role `guildos` (`LOGIN CREATEDB`, necessário p/ `sqlx::test`) e o banco `guildos`, e aponte `DATABASE_URL` no `backend/.env`. Como superusuário, crie também o papel da aplicação (usado pelo RLS): `CREATE ROLE guildos_app NOLOGIN; GRANT guildos_app TO guildos;`.
+
+A API aplica as migrations ao subir (como dono das tabelas) e executa as queries como `guildos_app`, sujeito ao RLS.
 
 Stack completa atrás do Traefik: `docker compose up --build` → http://localhost:8000.

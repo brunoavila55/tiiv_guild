@@ -18,6 +18,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env()?;
+    db::migrate(&config.database_url)
+        .await
+        .context("falha ao aplicar migrations")?;
+    tracing::info!("migrations aplicadas");
+
     let pool = db::connect_lazy(&config.database_url).context("DATABASE_URL inválida")?;
     let app = api::router(AppState::new(pool));
 
