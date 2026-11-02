@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO guild_members (id, guild_id, user_id, nickname, rank_id, status, notes, fields)\n           VALUES ($1, $2, $3, $4, $5, ($6::text)::member_status, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a061b421d715372e737812723f15365f15138510d1deb0ce743c3b93ef2c2c5"
+}

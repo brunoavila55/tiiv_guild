@@ -10,6 +10,7 @@ use chrono::{DateTime, Utc};
 use db::members::{MemberDetail, MemberFilter, MemberWrite, Rank};
 use domain::{
     error::Validator,
+    fields::ObjectSchema,
     members::{
         check_owner_status, clamp_page, like_pattern, normalize_nickname, normalize_notes, Actor,
         MemberStatus,
@@ -22,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
+use super::settings::member_schema;
 use crate::{error::ApiResult, state::AppState, tenant::TenantCtx};
 
 pub fn router() -> Router<AppState> {
@@ -67,6 +69,8 @@ struct MemberDetailDto {
     status: MemberStatus,
     /// Só para quem tem `members.manage`.
     notes: Option<String>,
+    /// Campos customizados da guilda (só os que ainda existem no schema).
+    fields: Map<String, Value>,
     joined_at: DateTime<Utc>,
     left_at: Option<DateTime<Utc>>,
     /// O usuário logado pode editar/remover este membro (permissão + hierarquia).
@@ -109,15 +113,19 @@ struct CreateReq {
     notes: Option<String>,
     /// E-mail de uma conta existente para vincular; vazio = membro sem conta.
     email: Option<String>,
+    #[serde(default)]
+    fields: Map<String, Value>,
 }
 
 /// Campos ausentes ficam como estão; `notes: ""` limpa as notas.
+/// `fields`, quando enviado, substitui todos os campos customizados.
 #[derive(Deserialize)]
 struct UpdateReq {
     nickname: Option<String>,
     rank_id: Option<Uuid>,
     status: Option<MemberStatus>,
     notes: Option<String>,
+    fields: Option<Map<String, Value>>,
 }
 
 /// O usuário logado na hierarquia da guilda.
@@ -143,7 +151,19 @@ fn is_owner_member(ctx: &TenantCtx, m: &MemberDetail) -> bool {
     m.user_id == Some(ctx.guild.owner_user_id)
 }
 
-fn detail_dto(ctx: &TenantCtx, actor: Actor, m: MemberDetail) -> MemberDetailDto {
+async fn schema_of(ctx: &TenantCtx) -> ApiResult<ObjectSchema> {
+    let mut tx = ctx.tx().await?;
+    let schema = member_schema(&mut tx).await?;
+    tx.commit().await?;
+    Ok(schema)
+}
+
+fn detail_dto(
+    ctx: &TenantCtx,
+    actor: Actor,
+    schema: &ObjectSchema,
+    m: MemberDetail,
+) -> MemberDetailDto {
     let is_owner = is_owner_member(ctx, &m);
     let reachable = actor.check_target(m.rank_position, is_owner).is_ok();
     let manage = ctx.require(Permission::MembersManage).is_ok();
@@ -151,6 +171,7 @@ fn detail_dto(ctx: &TenantCtx, actor: Actor, m: MemberDetail) -> MemberDetailDto
     MemberDetailDto {
         has_account: m.user_id.is_some(),
         notes: if manage { m.notes } else { None },
+        fields: schema.project(&m.fields),
         can_edit: manage && reachable,
         can_remove: kick && reachable && !is_owner && m.status != MemberStatus::Left,
         id: m.id,
@@ -204,11 +225,12 @@ async fn list_members(
 async fn load_detail(ctx: &TenantCtx, id: Uuid) -> ApiResult<MemberDetailDto> {
     let mut tx = ctx.tx().await?;
     let ranks = db::members::ranks(&mut tx).await?;
+    let schema = member_schema(&mut tx).await?;
     let member = db::members::find(&mut tx, id)
         .await?
         .ok_or(Error::NotFound)?;
     tx.commit().await?;
-    Ok(detail_dto(ctx, actor(ctx, &ranks), member))
+    Ok(detail_dto(ctx, actor(ctx, &ranks), &schema, member))
 }
 
 async fn show_member(ctx: TenantCtx, Path(id): Path<Uuid>) -> ApiResult<Json<MemberDetailDto>> {
@@ -222,10 +244,12 @@ async fn create_member(
     Json(req): Json<CreateReq>,
 ) -> ApiResult<(StatusCode, Json<MemberDetailDto>)> {
     ctx.require(Permission::MembersManage)?;
+    let schema = schema_of(&ctx).await?;
 
     let mut v = Validator::default();
     let nickname = v.check(normalize_nickname(&req.nickname));
     let notes = v.check(normalize_notes(req.notes.as_deref()));
+    let fields = Value::Object(v.check(schema.validate_values("fields", &req.fields)));
     let status = req.status.unwrap_or(MemberStatus::Active);
     if status.is_removal() {
         v.check::<()>(Err(Error::field(
@@ -262,6 +286,7 @@ async fn create_member(
         rank_id: rank.id,
         status,
         notes: notes.as_deref(),
+        fields: &fields,
     };
     let id = match db::members::insert(&mut tx, ctx.guild.id, user_id, &write).await {
         Ok(id) => id,
@@ -295,6 +320,7 @@ async fn update_member(
     Json(req): Json<UpdateReq>,
 ) -> ApiResult<Json<MemberDetailDto>> {
     ctx.require(Permission::MembersManage)?;
+    let schema = schema_of(&ctx).await?;
 
     let mut v = Validator::default();
     let nickname = req
@@ -305,6 +331,10 @@ async fn update_member(
         .notes
         .as_deref()
         .map(|n| v.check(normalize_notes(Some(n))));
+    let fields = req
+        .fields
+        .as_ref()
+        .map(|f| Value::Object(v.check(schema.validate_values("fields", f))));
     v.finish()?;
 
     let mut tx = ctx.tx().await?;
@@ -332,6 +362,7 @@ async fn update_member(
 
     let nickname = nickname.unwrap_or_else(|| current.nickname.clone());
     let notes = notes.unwrap_or_else(|| current.notes.clone());
+    let fields = fields.unwrap_or_else(|| current.fields.clone());
 
     let mut changes = Map::new();
     let mut diff = |key: &str, from: Value, to: Value| {
@@ -342,6 +373,14 @@ async fn update_member(
     diff("nickname", json!(current.nickname), json!(nickname));
     diff("rank", json!(current.rank_name), json!(rank.name));
     diff("status", json!(current.status), json!(status));
+    for (key, _) in schema.ordered() {
+        let value = |f: &Value| f.get(key).cloned().unwrap_or(Value::Null);
+        diff(
+            &format!("fields.{key}"),
+            value(&current.fields),
+            value(&fields),
+        );
+    }
     // O conteúdo das notas não vai para o histórico: quem só tem `members.view` não deve lê-lo.
     if notes != current.notes {
         changes.insert("notes".into(), json!(true));
@@ -356,6 +395,7 @@ async fn update_member(
                 rank_id: rank.id,
                 status,
                 notes: notes.as_deref(),
+                fields: &fields,
             },
         )
         .await?;
@@ -395,6 +435,7 @@ async fn remove_member(ctx: TenantCtx, Path(id): Path<Uuid>) -> ApiResult<Status
                 rank_id: current.rank_id,
                 status: MemberStatus::Left,
                 notes: current.notes.as_deref(),
+                fields: &current.fields,
             },
         )
         .await?;

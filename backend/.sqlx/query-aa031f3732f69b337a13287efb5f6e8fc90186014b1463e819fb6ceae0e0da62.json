@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id, m.user_id, u.display_name AS \"account_name?\", m.nickname, m.rank_id,\n                  r.name AS rank_name, r.position AS rank_position, m.status::text AS \"status!\",\n                  m.notes, m.joined_at, m.left_at\n             FROM guild_members m\n             JOIN guild_ranks r ON r.id = m.rank_id\n             LEFT JOIN users u ON u.id = m.user_id\n            WHERE m.id = $1\n              FOR UPDATE OF m",
+  "query": "SELECT m.id, m.user_id, u.display_name AS \"account_name?\", m.nickname, m.rank_id,\n                  r.name AS rank_name, r.position AS rank_position, m.status::text AS \"status!\",\n                  m.notes, m.fields, m.joined_at, m.left_at\n             FROM guild_members m\n             JOIN guild_ranks r ON r.id = m.rank_id\n             LEFT JOIN users u ON u.id = m.user_id\n            WHERE m.id = $1\n              FOR UPDATE OF m",
   "describe": {
     "columns": [
       {
@@ -50,11 +50,16 @@
       },
       {
         "ordinal": 9,
+        "name": "fields",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
         "name": "joined_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "left_at",
         "type_info": "Timestamptz"
       }
@@ -75,8 +80,9 @@
       null,
       true,
       false,
+      false,
       true
     ]
   },
-  "hash": "55ae34955b98839a956108fac7bbe7691ff524230a57ec7c94af35038e383a0c"
+  "hash": "aa031f3732f69b337a13287efb5f6e8fc90186014b1463e819fb6ceae0e0da62"
 }

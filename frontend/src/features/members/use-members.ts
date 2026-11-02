@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { del, get, patch, post, retryUnlessClientError } from "@/lib/api/client";
-import type { HistoryEntry, MemberDetail, MemberPage, Rank } from "@/lib/api/types";
+import type { HistoryEntry, MemberDetail, MemberPage, ObjectSchema, Rank } from "@/lib/api/types";
+import { fromFormValues } from "@/lib/fields";
 
 import type { EditMemberForm, NewMemberForm } from "./rules";
 
@@ -36,19 +37,26 @@ function useInvalidateMembers() {
   return () => Promise.all([qc.invalidateQueries({ queryKey: ["members"] }), qc.invalidateQueries({ queryKey: ["public"] })]);
 }
 
-export function useAddMember() {
+/** `schema` é o dos campos customizados: os valores do formulário viram os tipos da API. */
+export function useAddMember(schema: ObjectSchema) {
   const invalidate = useInvalidateMembers();
   return useMutation({
     mutationFn: (f: NewMemberForm) =>
-      post<MemberDetail>("/members", { ...f, email: f.email || null, notes: f.notes || null }),
+      post<MemberDetail>("/members", {
+        ...f,
+        email: f.email || null,
+        notes: f.notes || null,
+        fields: fromFormValues(schema, f.fields),
+      }),
     onSuccess: invalidate,
   });
 }
 
-export function useUpdateMember(id: string) {
+export function useUpdateMember(id: string, schema: ObjectSchema) {
   const invalidate = useInvalidateMembers();
   return useMutation({
-    mutationFn: (f: EditMemberForm) => patch<MemberDetail>(`/members/${id}`, f),
+    mutationFn: (f: EditMemberForm) =>
+      patch<MemberDetail>(`/members/${id}`, { ...f, fields: fromFormValues(schema, f.fields) }),
     onSuccess: invalidate,
   });
 }

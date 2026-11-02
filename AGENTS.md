@@ -92,9 +92,9 @@ guild_ranks(id, guild_id, name, position, permissions text[])        -- menor po
 guild_members(id, guild_id, user_id NULL, nickname, rank_id, status,  -- active|trial|inactive|left|banned
               fields jsonb, notes, joined_at, left_at)                -- fields = campos customizados da guilda
 member_history(id, guild_id, member_id, actor_member_id, action, payload jsonb, at)
+guild_settings(guild_id PK, member_fields jsonb)               -- schema dos campos customizados (domain::fields)
 
 -- planejado (NÃO criar antes da etapa do roadmap)
-guild_settings(guild_id PK, member_fields jsonb)        -- schema dos campos customizados (P1)
 guild_modules(guild_id, module, enabled, settings jsonb) -- módulos ativos (P1)
 games / game_classes / game_servers / characters         -- módulo games (P2)
 activities / activity_participants                       -- eventos, raids… (P3)

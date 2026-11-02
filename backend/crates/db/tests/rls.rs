@@ -1,7 +1,7 @@
 //! O RLS isola os tenants mesmo com SQL direto, como `guildos_app`.
 
 use db::guilds::{self, NewGuild};
-use db::{members, tenant_tx, users, with_app_role};
+use db::{members, settings, tenant_tx, users, with_app_role};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -11,6 +11,7 @@ const TENANT_TABLES: &[&str] = &[
     "guild_ranks",
     "guild_members",
     "member_history",
+    "guild_settings",
 ];
 
 async fn new_guild(pool: &PgPool, slug: &str, owner: Uuid) -> sqlx::Result<guilds::Guild> {
@@ -39,6 +40,12 @@ async fn tenants_are_isolated(opts: PgPoolOptions, conn: PgConnectOptions) -> sq
     let owner = users::create(&pool, "dono@example.com", "x", "Dono").await?;
     let a = new_guild(&pool, "guilda-a", owner.id).await?;
     let b = new_guild(&pool, "guilda-b", owner.id).await?;
+    for g in [&a, &b] {
+        let mut tx = tenant_tx(&pool, g.id).await?;
+        settings::set_member_fields(&mut tx, g.id, &serde_json::json!({ "properties": {} }))
+            .await?;
+        tx.commit().await?;
+    }
 
     // Sem tenant definido nenhuma linha de tenant é visível.
     let mut no_tenant = pool.acquire().await?;

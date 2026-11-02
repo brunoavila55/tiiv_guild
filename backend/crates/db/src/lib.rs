@@ -4,6 +4,7 @@
 pub mod guilds;
 pub mod members;
 pub mod sessions;
+pub mod settings;
 pub mod users;
 
 use sqlx::{

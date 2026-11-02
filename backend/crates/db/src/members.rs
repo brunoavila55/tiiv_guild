@@ -39,6 +39,8 @@ pub struct MemberDetail {
     pub rank_position: i32,
     pub status: MemberStatus,
     pub notes: Option<String>,
+    /// Valores dos campos customizados (validados contra `guild_settings.member_fields`).
+    pub fields: serde_json::Value,
     pub joined_at: DateTime<Utc>,
     pub left_at: Option<DateTime<Utc>>,
 }
@@ -77,6 +79,7 @@ pub struct MemberWrite<'a> {
     pub rank_id: Uuid,
     pub status: MemberStatus,
     pub notes: Option<&'a str>,
+    pub fields: &'a serde_json::Value,
 }
 
 /// Índice que garante uma conta por guilda.
@@ -164,7 +167,7 @@ pub async fn find(conn: &mut PgConnection, id: Uuid) -> sqlx::Result<Option<Memb
     let row = sqlx::query!(
         r#"SELECT m.id, m.user_id, u.display_name AS "account_name?", m.nickname, m.rank_id,
                   r.name AS rank_name, r.position AS rank_position, m.status::text AS "status!",
-                  m.notes, m.joined_at, m.left_at
+                  m.notes, m.fields, m.joined_at, m.left_at
              FROM guild_members m
              JOIN guild_ranks r ON r.id = m.rank_id
              LEFT JOIN users u ON u.id = m.user_id
@@ -185,6 +188,7 @@ pub async fn find(conn: &mut PgConnection, id: Uuid) -> sqlx::Result<Option<Memb
             rank_position: r.rank_position,
             status: parse_status(&r.status)?,
             notes: r.notes,
+            fields: r.fields,
             joined_at: r.joined_at,
             left_at: r.left_at,
         })
@@ -201,8 +205,8 @@ pub async fn insert(
 ) -> sqlx::Result<Uuid> {
     let id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO guild_members (id, guild_id, user_id, nickname, rank_id, status, notes)
-           VALUES ($1, $2, $3, $4, $5, ($6::text)::member_status, $7)"#,
+        r#"INSERT INTO guild_members (id, guild_id, user_id, nickname, rank_id, status, notes, fields)
+           VALUES ($1, $2, $3, $4, $5, ($6::text)::member_status, $7, $8)"#,
         id,
         guild_id,
         user_id,
@@ -210,6 +214,7 @@ pub async fn insert(
         m.rank_id,
         m.status.as_str(),
         m.notes,
+        m.fields,
     )
     .execute(conn)
     .await?;
@@ -221,13 +226,14 @@ pub async fn update(conn: &mut PgConnection, id: Uuid, m: &MemberWrite<'_>) -> s
     sqlx::query!(
         r#"UPDATE guild_members
               SET nickname = $2, rank_id = $3, status = ($4::text)::member_status, notes = $5,
-                  left_at = CASE WHEN $4 = 'left' THEN coalesce(left_at, now()) END
+                  fields = $6, left_at = CASE WHEN $4 = 'left' THEN coalesce(left_at, now()) END
             WHERE id = $1"#,
         id,
         m.nickname,
         m.rank_id,
         m.status.as_str(),
         m.notes,
+        m.fields,
     )
     .execute(conn)
     .await?;

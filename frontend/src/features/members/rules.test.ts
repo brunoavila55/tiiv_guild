@@ -27,14 +27,27 @@ describe("describeHistory", () => {
 
 describe("schemas", () => {
   it("valida o cadastro", () => {
-    const ok = newMemberSchema.safeParse({ nickname: " Ana ", rank_id: "r", status: "trial", email: "", notes: "" });
+    const ok = newMemberSchema.safeParse({ nickname: " Ana ", rank_id: "r", status: "trial", email: "", notes: "", fields: { mic: true } });
     expect(ok.success && ok.data.nickname).toBe("Ana");
-    const bad = newMemberSchema.safeParse({ nickname: "a", rank_id: "", status: "banned", email: "x", notes: "" });
+    const bad = newMemberSchema.safeParse({ nickname: "a", rank_id: "", status: "banned", email: "x", notes: "", fields: {} });
     expect(bad.success).toBe(false);
     expect(bad.error?.issues.map((i) => i.path[0]).sort()).toEqual(["email", "nickname", "rank_id", "status"]);
   });
 
   it("edição aceita qualquer status", () => {
-    expect(editMemberSchema.safeParse({ nickname: "Ana", rank_id: "r", status: "left", notes: "" }).success).toBe(true);
+    expect(editMemberSchema.safeParse({ nickname: "Ana", rank_id: "r", status: "left", notes: "", fields: {} }).success).toBe(true);
+  });
+});
+
+describe("histórico de campos customizados", () => {
+  it("usa o nome do schema e formata o valor", () => {
+    const schema = {
+      type: "object" as const,
+      properties: { mic: { type: "boolean" as const, title: "Microfone" } },
+      required: [],
+      "x-order": ["mic"],
+    };
+    const h = entry("member.updated", { "fields.mic": { from: null, to: true }, "fields.old": { from: "a", to: null }, rank: { from: "A", to: "B" } });
+    expect(describeHistory(h, schema)).toBe("Ficha alterada — rank: A → B; Microfone: — → Sim; old: a → —");
   });
 });

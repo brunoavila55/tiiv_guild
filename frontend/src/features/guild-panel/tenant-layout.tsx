@@ -42,6 +42,7 @@ export function TenantLayout() {
     ...(g.secondary_color && { "--guild-secondary": g.secondary_color }),
   } as CSSProperties;
   const canEditBranding = guild.data?.me.permissions.includes("guild.branding.edit") ?? false;
+  const canEditSettings = guild.data?.me.permissions.includes("guild.settings.edit") ?? false;
 
   return (
     <BrandingPreviewContext.Provider value={previewCtx}>
@@ -70,6 +71,11 @@ export function TenantLayout() {
                   {canEditBranding && (
                     <Link to="/painel/visual" className={navLink} activeProps={{ className: "text-fg" }}>
                       {t.branding.nav}
+                    </Link>
+                  )}
+                  {canEditSettings && (
+                    <Link to="/painel/configuracoes" className={navLink} activeProps={{ className: "text-fg" }}>
+                      {t.settings.nav}
                     </Link>
                   )}
                 </>

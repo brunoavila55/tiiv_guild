@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO guild_settings (guild_id, member_fields) VALUES ($1, $2)\n           ON CONFLICT (guild_id) DO UPDATE SET member_fields = EXCLUDED.member_fields",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6e82e0573a133d4cf57c80dc195cab6d5f701a3c5df27c7fbb2c2842c6e1403"
+}

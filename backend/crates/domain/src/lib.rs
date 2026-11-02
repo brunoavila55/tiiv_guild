@@ -2,6 +2,7 @@
 
 pub mod branding;
 pub mod error;
+pub mod fields;
 pub mod host;
 pub mod members;
 pub mod permissions;

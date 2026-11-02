@@ -115,10 +115,34 @@ export interface MemberDetail {
   rank_name: string;
   status: MemberStatus;
   notes: string | null;
+  /** Campos customizados (só os que existem no schema atual). */
+  fields: Record<string, FieldValue>;
   joined_at: string;
   left_at: string | null;
   can_edit: boolean;
   can_remove: boolean;
+}
+
+export type FieldType = "string" | "integer" | "number" | "boolean";
+export type FieldValue = string | number | boolean;
+
+/** Um campo customizado (subconjunto de JSON Schema, espelho de `domain::fields`). */
+export interface FieldDef {
+  type: FieldType;
+  title: string;
+  enum?: (string | number)[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+}
+
+/** Schema dos campos de membro; a ordem de exibição vem em `x-order`. */
+export interface ObjectSchema {
+  type: "object";
+  properties: Record<string, FieldDef>;
+  required: string[];
+  "x-order": string[];
 }
 
 export interface Rank {
