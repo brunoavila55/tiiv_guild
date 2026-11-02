@@ -1,0 +1,6 @@
+# Contexto é a raiz do repo; só backend/ e game-packs/ entram na imagem.
+*
+!backend
+!game-packs
+backend/target
+backend/.env

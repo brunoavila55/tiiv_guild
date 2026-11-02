@@ -8,7 +8,10 @@ use tower::ServiceExt;
 fn app() -> axum::Router {
     // Pool lazy: /api/health não toca no banco.
     let pool = db::connect_lazy("postgres://localhost/unused").expect("url válida");
-    api::router(api::AppState::new(pool))
+    api::router(api::AppState::new(
+        pool,
+        games::GameRegistry::builtin().unwrap(),
+    ))
 }
 
 #[tokio::test]

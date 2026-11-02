@@ -1,0 +1,8 @@
+[
+  { "slug": "human", "name": "Humano" },
+  { "slug": "winged_elf", "name": "Alado" },
+  { "slug": "untamed", "name": "Selvagem" },
+  { "slug": "tideborn", "name": "Abissal" },
+  { "slug": "earthguard", "name": "Guardião da Terra" },
+  { "slug": "nightshade", "name": "Sombrio" }
+]

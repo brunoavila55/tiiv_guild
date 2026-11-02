@@ -59,7 +59,10 @@ async fn send(
 }
 
 fn app(pool: PgPool) -> Router {
-    api::router(api::AppState::new(pool))
+    api::router(api::AppState::new(
+        pool,
+        games::GameRegistry::builtin().unwrap(),
+    ))
 }
 
 async fn register(app: &Router, email: &str) -> Res {

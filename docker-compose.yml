@@ -30,7 +30,9 @@ services:
       - miniodata:/data
 
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-guildos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-guildos}
       API_BIND_ADDR: 0.0.0.0:8080

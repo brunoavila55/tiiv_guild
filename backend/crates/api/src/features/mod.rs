@@ -5,8 +5,12 @@ use axum::Router;
 use crate::AppState;
 
 pub mod auth;
+pub mod games;
 pub mod health;
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(health::routes()).merge(auth::routes())
+    Router::new()
+        .merge(health::routes())
+        .merge(auth::routes())
+        .merge(games::routes())
 }

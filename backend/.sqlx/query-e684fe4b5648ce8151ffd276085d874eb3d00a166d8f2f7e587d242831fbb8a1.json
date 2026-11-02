@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO games (id, slug, name) VALUES ($1, $2, $3)\n           ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e684fe4b5648ce8151ffd276085d874eb3d00a166d8f2f7e587d242831fbb8a1"
+}

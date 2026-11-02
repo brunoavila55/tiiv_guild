@@ -4,8 +4,9 @@ use std::time::Duration;
 
 use sqlx::migrate::Migrator;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Executor, Postgres, Transaction};
+use sqlx::{ConnectOptions, Executor, PgConnection, Postgres, Transaction};
 
+pub mod catalog;
 pub mod sessions;
 pub mod users;
 
@@ -17,10 +18,15 @@ pub const APP_ROLE: &str = "guildos_app";
 
 pub static MIGRATOR: Migrator = sqlx::migrate!("../../migrations");
 
-/// Aplica as migrations pendentes com o usuário da URL (dono das tabelas).
-pub async fn migrate(database_url: &str) -> Result<(), sqlx::migrate::MigrateError> {
-    let mut conn = database_url.parse::<PgConnectOptions>()?.connect().await?;
-    MIGRATOR.run(&mut conn).await
+/// Conexão avulsa com o usuário da URL (dono das tabelas), sem `APP_ROLE`.
+/// Usada só no startup: migrations e sincronização do catálogo de jogos.
+pub async fn connect_owner(database_url: &str) -> Result<PgConnection, sqlx::Error> {
+    database_url.parse::<PgConnectOptions>()?.connect().await
+}
+
+/// Aplica as migrations pendentes.
+pub async fn migrate(conn: &mut PgConnection) -> Result<(), sqlx::migrate::MigrateError> {
+    MIGRATOR.run(conn).await
 }
 
 /// Cria o pool sem abrir conexão imediatamente; a primeira query conecta.
