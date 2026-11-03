@@ -7,7 +7,10 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Utc};
-use db::members::{MemberDetail, MemberFilter, MemberWrite, Rank};
+use db::{
+    members::{MemberDetail, MemberFilter, MemberWrite},
+    ranks::Rank,
+};
 use domain::{
     error::Validator,
     fields::ObjectSchema,
@@ -34,7 +37,6 @@ pub fn router() -> Router<AppState> {
             get(show_member).patch(update_member).delete(remove_member),
         )
         .route("/members/{id}/history", get(member_history))
-        .route("/ranks", get(list_ranks))
 }
 
 #[derive(Serialize)]
@@ -87,14 +89,6 @@ struct HistoryDto {
     at: DateTime<Utc>,
 }
 
-#[derive(Serialize)]
-struct RankDto {
-    id: Uuid,
-    name: String,
-    position: i32,
-    permissions: Vec<String>,
-}
-
 #[derive(Deserialize)]
 struct ListQuery {
     status: Option<MemberStatus>,
@@ -129,15 +123,8 @@ struct UpdateReq {
 }
 
 /// O usuário logado na hierarquia da guilda.
-fn actor(ctx: &TenantCtx, ranks: &[Rank]) -> Actor {
-    let rank_position = ranks
-        .iter()
-        .find(|r| r.id == ctx.membership.rank_id)
-        .map_or(i32::MAX, |r| r.position);
-    Actor {
-        is_owner: ctx.is_owner,
-        rank_position,
-    }
+pub fn actor(ctx: &TenantCtx, ranks: &[Rank]) -> Actor {
+    ctx.actor(ranks.iter().map(|r| (r.id, r.position)))
 }
 
 fn find_rank(ranks: &[Rank], id: Uuid) -> Result<&Rank, Error> {
@@ -224,7 +211,7 @@ async fn list_members(
 
 async fn load_detail(ctx: &TenantCtx, id: Uuid) -> ApiResult<MemberDetailDto> {
     let mut tx = ctx.tx().await?;
-    let ranks = db::members::ranks(&mut tx).await?;
+    let ranks = db::ranks::list(&mut tx).await?;
     let schema = member_schema(&mut tx).await?;
     let member = db::members::find(&mut tx, id)
         .await?
@@ -277,7 +264,7 @@ async fn create_member(
     };
 
     let mut tx = ctx.tx().await?;
-    let ranks = db::members::ranks(&mut tx).await?;
+    let ranks = db::ranks::list(&mut tx).await?;
     let rank = find_rank(&ranks, req.rank_id)?;
     actor(&ctx, &ranks).check_assign(rank.position)?;
 
@@ -338,7 +325,7 @@ async fn update_member(
     v.finish()?;
 
     let mut tx = ctx.tx().await?;
-    let ranks = db::members::ranks(&mut tx).await?;
+    let ranks = db::ranks::list(&mut tx).await?;
     let actor = actor(&ctx, &ranks);
     let current = db::members::find(&mut tx, id)
         .await?
@@ -418,7 +405,7 @@ async fn remove_member(ctx: TenantCtx, Path(id): Path<Uuid>) -> ApiResult<Status
     ctx.require(Permission::MembersKick)?;
 
     let mut tx = ctx.tx().await?;
-    let ranks = db::members::ranks(&mut tx).await?;
+    let ranks = db::ranks::list(&mut tx).await?;
     let current = db::members::find(&mut tx, id)
         .await?
         .ok_or(Error::NotFound)?;
@@ -470,24 +457,6 @@ async fn member_history(ctx: TenantCtx, Path(id): Path<Uuid>) -> ApiResult<Json<
                 payload: h.payload,
                 actor_nickname: h.actor_nickname,
                 at: h.at,
-            })
-            .collect(),
-    ))
-}
-
-async fn list_ranks(ctx: TenantCtx) -> ApiResult<Json<Vec<RankDto>>> {
-    ctx.require(Permission::MembersView)?;
-    let mut tx = ctx.tx().await?;
-    let ranks = db::members::ranks(&mut tx).await?;
-    tx.commit().await?;
-    Ok(Json(
-        ranks
-            .into_iter()
-            .map(|r| RankDto {
-                id: r.id,
-                name: r.name,
-                position: r.position,
-                permissions: r.permissions,
             })
             .collect(),
     ))

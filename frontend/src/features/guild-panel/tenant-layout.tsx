@@ -43,6 +43,7 @@ export function TenantLayout() {
   } as CSSProperties;
   const canEditBranding = guild.data?.me.permissions.includes("guild.branding.edit") ?? false;
   const canEditSettings = guild.data?.me.permissions.includes("guild.settings.edit") ?? false;
+  const canManageRanks = guild.data?.me.permissions.includes("ranks.manage") ?? false;
 
   return (
     <BrandingPreviewContext.Provider value={previewCtx}>
@@ -68,6 +69,11 @@ export function TenantLayout() {
                   <Link to="/painel/membros" className={navLink} activeProps={{ className: "text-fg" }}>
                     {t.panel.members}
                   </Link>
+                  {canManageRanks && (
+                    <Link to="/painel/ranks" className={navLink} activeProps={{ className: "text-fg" }}>
+                      {t.ranks.nav}
+                    </Link>
+                  )}
                   {canEditBranding && (
                     <Link to="/painel/visual" className={navLink} activeProps={{ className: "text-fg" }}>
                       {t.branding.nav}

@@ -19,9 +19,9 @@ export function PanelHome() {
               <p className="mb-2 text-sm text-muted">{t.panel.permissions}</p>
               <div className="flex flex-wrap gap-2">
                 {g.me.permissions.map((p) => (
-                  <code key={p} className="rounded-md bg-surface-2 px-2 py-1 text-xs">
-                    {p}
-                  </code>
+                  <span key={p} className="rounded-md bg-surface-2 px-2 py-1 text-xs">
+                    {t.ranks.perms[p] ?? p}
+                  </span>
                 ))}
               </div>
             </div>

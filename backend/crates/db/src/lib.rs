@@ -3,6 +3,7 @@
 
 pub mod guilds;
 pub mod members;
+pub mod ranks;
 pub mod sessions;
 pub mod settings;
 pub mod users;

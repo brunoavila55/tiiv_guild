@@ -12,6 +12,7 @@ import { AdminGuildsPage } from "@/features/admin/admin-guilds-page";
 import { LoginPage } from "@/features/auth/login-page";
 import { RegisterPage } from "@/features/auth/register-page";
 import { BrandingPage } from "@/features/guild-branding/branding-page";
+import { RanksPage } from "@/features/guild-ranks/ranks-page";
 import { SettingsPage } from "@/features/guild-settings/settings-page";
 import { PanelHome } from "@/features/guild-panel/panel-home";
 import { TenantLayout } from "@/features/guild-panel/tenant-layout";
@@ -71,8 +72,9 @@ function tenantRouter() {
   const panel = createRoute({ getParentRoute: () => root, path: "/painel", component: PanelHome });
   const members = createRoute({ getParentRoute: () => root, path: "/painel/membros", component: MembersPage });
   const branding = createRoute({ getParentRoute: () => root, path: "/painel/visual", component: BrandingPage });
+  const ranks = createRoute({ getParentRoute: () => root, path: "/painel/ranks", component: RanksPage });
   const settings = createRoute({ getParentRoute: () => root, path: "/painel/configuracoes", component: SettingsPage });
-  return createRouter({ routeTree: root.addChildren([publicPage, panel, members, branding, settings]) });
+  return createRouter({ routeTree: root.addChildren([publicPage, panel, members, ranks, branding, settings]) });
 }
 
 function unknownRouter() {

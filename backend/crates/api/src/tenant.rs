@@ -4,9 +4,11 @@ use axum::{extract::FromRequestParts, http::request::Parts};
 use db::{guilds::Guild, members::Membership, users::User, PgPool, Tx};
 use domain::{
     host::HostKind,
+    members::Actor,
     permissions::{Permission, PermissionSet},
     Error,
 };
+use uuid::Uuid;
 
 use crate::{auth::CurrentUser, error::ApiError, host::host_kind, state::AppState};
 
@@ -50,6 +52,18 @@ impl TenantCtx {
     /// Transação com o RLS restrito a esta guilda. Única porta para dados de tenant.
     pub async fn tx(&self) -> Result<Tx, ApiError> {
         Ok(db::tenant_tx(&self.pool, self.guild.id).await?)
+    }
+
+    /// O usuário logado na hierarquia da guilda, dado `(id, position)` de cada rank.
+    pub fn actor(&self, ranks: impl IntoIterator<Item = (Uuid, i32)>) -> Actor {
+        let rank_position = ranks
+            .into_iter()
+            .find(|(id, _)| *id == self.membership.rank_id)
+            .map_or(i32::MAX, |(_, position)| position);
+        Actor {
+            is_owner: self.is_owner,
+            rank_position,
+        }
     }
 }
 

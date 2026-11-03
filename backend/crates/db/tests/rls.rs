@@ -1,7 +1,7 @@
 //! O RLS isola os tenants mesmo com SQL direto, como `guildos_app`.
 
 use db::guilds::{self, NewGuild};
-use db::{members, settings, tenant_tx, users, with_app_role};
+use db::{members, ranks, settings, tenant_tx, users, with_app_role};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -70,7 +70,7 @@ async fn tenants_are_isolated(opts: PgPoolOptions, conn: PgConnectOptions) -> sq
         ..Default::default()
     };
     assert_eq!(members::page(&mut tx, &all).await?.1, 1);
-    assert_eq!(members::ranks(&mut tx).await?.len(), 4);
+    assert_eq!(ranks::list(&mut tx).await?.len(), 4);
 
     // Escrever na guilda B com o tenant A falha (WITH CHECK).
     let write_b = sqlx::query(

@@ -8,6 +8,7 @@ mod health;
 mod media;
 mod members;
 mod public;
+mod ranks;
 mod settings;
 mod tenant;
 
@@ -22,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .merge(guilds::router())
         .merge(tenant::router())
         .merge(members::router())
+        .merge(ranks::router())
         .merge(branding::router())
         .merge(settings::router())
         .merge(public::router())

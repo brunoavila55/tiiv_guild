@@ -1,4 +1,4 @@
-//! Membros e ranks do tenant atual. Toda função recebe a conexão de um [`crate::tenant_tx`].
+//! Membros do tenant atual. Toda função recebe a conexão de um [`crate::tenant_tx`].
 
 use chrono::{DateTime, Utc};
 use domain::members::MemberStatus;
@@ -43,14 +43,6 @@ pub struct MemberDetail {
     pub fields: serde_json::Value,
     pub joined_at: DateTime<Utc>,
     pub left_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Rank {
-    pub id: Uuid,
-    pub name: String,
-    pub position: i32,
-    pub permissions: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -263,6 +255,32 @@ pub async fn add_history(
     Ok(())
 }
 
+/// O mesmo registro de histórico para vários membros (ex.: realocados ao apagar um rank).
+pub async fn add_history_many(
+    conn: &mut PgConnection,
+    guild_id: Uuid,
+    member_ids: &[Uuid],
+    actor_member_id: Uuid,
+    action: &str,
+    payload: &serde_json::Value,
+) -> sqlx::Result<()> {
+    let ids: Vec<Uuid> = member_ids.iter().map(|_| Uuid::now_v7()).collect();
+    sqlx::query!(
+        r#"INSERT INTO member_history (id, guild_id, member_id, actor_member_id, action, payload)
+           SELECT h.id, $3, h.member_id, $4, $5, $6
+             FROM unnest($1::uuid[], $2::uuid[]) AS h(id, member_id)"#,
+        &ids,
+        member_ids,
+        guild_id,
+        actor_member_id,
+        action,
+        payload,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 /// Histórico do membro, do mais recente para o mais antigo.
 pub async fn history(conn: &mut PgConnection, member_id: Uuid) -> sqlx::Result<Vec<HistoryEntry>> {
     sqlx::query_as!(
@@ -295,15 +313,6 @@ pub async fn public_roster(conn: &mut PgConnection) -> sqlx::Result<Vec<PublicMe
              FROM guild_members m JOIN guild_ranks r ON r.id = m.rank_id
             WHERE m.status = 'active'
             ORDER BY r.position, lower(m.nickname)"#
-    )
-    .fetch_all(conn)
-    .await
-}
-
-pub async fn ranks(conn: &mut PgConnection) -> sqlx::Result<Vec<Rank>> {
-    sqlx::query_as!(
-        Rank,
-        "SELECT id, name, position, permissions FROM guild_ranks ORDER BY position"
     )
     .fetch_all(conn)
     .await

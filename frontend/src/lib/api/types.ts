@@ -150,6 +150,10 @@ export interface Rank {
   name: string;
   position: number;
   permissions: string[];
+  /** Membros de qualquer status (inclusive quem saiu) neste rank. */
+  member_count: number;
+  /** O usuário logado pode editar, mover e apagar este rank. */
+  can_manage: boolean;
 }
 
 /** `payload` de `member.updated`: campo → `{ from, to }` (notas só como `true`). */
